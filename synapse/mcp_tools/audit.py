@@ -1,5 +1,5 @@
 # Copyright (c) 2026, Dxbitz and contributors
-"""The MCP access log — one row for every call, read or write, allowed or not.
+"""The Synapse Log, one row for every call, read or write, allowed or not.
 
 Every tool is wrapped in @audited. The wrapper owns four things the tools should
 not each reimplement:
@@ -11,7 +11,7 @@ not each reimplement:
 * **The transaction.** A failed write is rolled back before anything else, so a
   half-applied document never survives. A successful one is committed together
   with its log row.
-* **The record.** Written with db_insert rather than a full insert() — no
+* **The record.** Written with db_insert rather than a full insert(), no
   validation, no hooks, no link checks. This runs on every call including
   rejections, so it has to be cheap.
 * **Redaction.** Password-ish keys never reach the log.
@@ -29,10 +29,12 @@ import frappe
 
 from synapse.mcp_tools.policy import Denied
 
-LOG_DOCTYPE = "MCP Access Log"
+LOG_DOCTYPE = "Synapse Log"
 
 READ = "Read"
 WRITE = "Write"
+OPERATE = "Operate"
+CUSTOM = "Custom"
 SQL = "SQL"
 OTHER = "Other"
 
@@ -75,15 +77,36 @@ class Entry:
 		self.row_count = int(count or 0)
 
 	def sql(self, query: str):
+		"""The SQL text. Gated by log_payloads like every other field value.
+
+		A query carries literal values in its WHERE clause, so it is a payload in
+		the same sense the write tools' values are. When a site turns payload
+		logging off it does so to keep data values out of the log, and the SQL
+		text has to obey that too, the row still records who ran SQL, when, the
+		status and the row count.
+		"""
+		from synapse.mcp_tools import settings
+
+		try:
+			if not settings.log_payloads():
+				return
+		except Exception:
+			pass
+
 		self.query = str(query)[:MAX_QUERY_CHARS]
 
-	def sent(self, values):
-		"""What the caller asked for. Redacted, truncated, stored as JSON."""
-		self.payload = _json(values)
+	def sent(self, values, secret_keys=None):
+		"""What the caller asked for. Redacted, truncated, stored as JSON.
 
-	def changed(self, before_after):
+		secret_keys names the Password-fieldtype fields of the target DocType, so
+		a secret is masked by field type even when its key does not look like one
+		(the regex alone misses a Password field named, say, `pin` or `access`).
+		"""
+		self.payload = _json(values, secret_keys)
+
+	def changed(self, before_after, secret_keys=None):
 		"""Field-level before/after for a write. Same treatment as sent()."""
-		self.changes = _json(before_after)
+		self.changes = _json(before_after, secret_keys)
 
 
 def current() -> Entry | None:
@@ -107,7 +130,7 @@ def audited(kind: str, tool: str | None = None):
 			except Denied as e:
 				return _fail(entry, "Rejected", str(e))
 			except frappe.PermissionError as e:
-				# Gate 4 — Frappe itself refused. Reported like any other
+				# Gate 4, Frappe itself refused. Reported like any other
 				# rejection so the model does not retry it as a transient error.
 				# Document.raise_no_permission_to raises an *empty*
 				# PermissionError and leaves the detail in flags.error_message,
@@ -210,7 +233,7 @@ def _credential() -> str:
 	return "Session"
 
 
-def _json(value) -> str | None:
+def _json(value, secret_keys=None) -> str | None:
 	from synapse.mcp_tools import settings
 
 	if value is None:
@@ -222,27 +245,41 @@ def _json(value) -> str | None:
 	except Exception:
 		pass
 
+	secrets = frozenset(k.lower() for k in (secret_keys or ()))
+
 	try:
-		text = json.dumps(redact(value), default=str, indent=1)
+		text = json.dumps(redact(value, secrets), default=str, indent=1)
 	except Exception:
 		text = str(value)
 
 	if len(text) > MAX_JSON_CHARS:
-		text = text[:MAX_JSON_CHARS] + "\n… truncated"
+		text = text[:MAX_JSON_CHARS] + "\n... truncated"
 
 	return text
 
 
-def redact(value):
-	"""Recursively blank anything whose key looks like a credential."""
+def redact(value, secret_keys=frozenset()):
+	"""Recursively blank anything whose key looks like, or is, a credential.
+
+	A key is masked if it matches the credential-name pattern, or if it is one of
+	`secret_keys` (the caller's Password-fieldtype field names). The second path
+	is what catches a Password field whose name the pattern would miss.
+	"""
 
 	if isinstance(value, dict):
-		return {k: (_REDACTED if _SECRET_RE.search(str(k)) else redact(v)) for k, v in value.items()}
+		return {
+			k: (_REDACTED if _is_secret(k, secret_keys) else redact(v, secret_keys))
+			for k, v in value.items()
+		}
 
 	if isinstance(value, (list, tuple)):
-		return [redact(v) for v in value]
+		return [redact(v, secret_keys) for v in value]
 
 	return value
+
+
+def _is_secret(key, secret_keys) -> bool:
+	return bool(_SECRET_RE.search(str(key))) or str(key).lower() in secret_keys
 
 
 def _one_line(e: Exception) -> str:

@@ -1,11 +1,11 @@
 # Copyright (c) 2026, Dxbitz and contributors
-"""The read-only SQL tool — the escape hatch, not the front door.
+"""The read-only SQL tool, the escape hatch, not the front door.
 
 Raw SQL bypasses Frappe's permission system completely, so this tool is not
-part of the document toolset and does not share its allowlist. It is gated on
-its own role, `MCP SQL Reader`, it is off until `enable_sql_tool` is ticked in
-MCP Settings, and it should only ever be held by someone who already has direct
-database access.
+part of the document toolset and does not share the profile grants. It is gated
+on its own switch, `Allow SQL` on a Synapse Profile the caller holds, and it
+is off until `enable_sql_tool` is ticked in Synapse Settings as well. Grant it
+only to someone who already has direct database access.
 
 Reach for documents.py first. Use this when a question genuinely needs a join or
 an aggregate that get_list cannot express, and accept that the answer ignores
@@ -13,7 +13,7 @@ every permission rule on the site.
 
 Two layers stand behind it: the read-only MariaDB user in site_config
 (connection.py), which the database enforces, and guard.py, which is text
-matching. See the MCP section of the README.
+matching. See the SQL section of the README.
 """
 
 import re
@@ -26,7 +26,6 @@ from synapse.mcp_tools import audit, connection, serialise, settings
 from synapse.mcp_tools.guard import UnsafeQuery, validate_read_only
 from synapse.mcp_tools.policy import Denied
 
-REQUIRED_ROLE = "MCP SQL Reader"
 TIMEOUT_SECONDS = 15
 
 # Matches a LIMIT that already closes the statement, with or without an offset:
@@ -35,31 +34,37 @@ _TRAILING_LIMIT_RE = re.compile(r"\blimit\s+\d+\s*(?:,\s*\d+|offset\s+\d+)?\s*$"
 
 
 @mcp.tool(
-	roles=[REQUIRED_ROLE],
 	annotations=ToolAnnotations(title="Run read-only SQL", readOnlyHint=True),
 	enabled=settings.sql_tool_enabled,
 )
 @audit.audited(audit.SQL)
 def run_sql_query(query: str, limit: int | None = None):
-	"""Run a read-only SQL query against the ERPNext database and return rows.
+	"""Run a read-only SQL SELECT query against the ERPNext/Frappe database.
 
-	This ignores Frappe permissions entirely — prefer get_list and get_doc, and
-	use this only for joins or aggregates they cannot express.
+	Use this for joins, aggregates, GROUP BY, subqueries and cross-DocType
+	reconciliations, questions that span tables or summarise rows, which the
+	structured read tools cannot express. Returns the result rows.
 
 	Only SELECT and WITH statements are permitted. Table names follow the Frappe
-	convention of `tab` plus the DocType name, for example `tabSales Invoice`.
-	Child tables are separate tables joined on `parent`. Submitted documents have
-	docstatus = 1, drafts 0, cancelled 2.
+	convention of `tab` plus the DocType name, for example `tabSales Invoice`,
+	`tabGL Entry`, `tabStock Ledger Entry`. Child tables are separate tables
+	joined on `parent`. Submitted documents have docstatus = 1, drafts 0,
+	cancelled 2.
+
+	Note: this runs outside Frappe's permission system and returns every row the
+	query reaches regardless of DocType permissions, which is why it needs the
+	dedicated Allow SQL grant. For a single DocType filtered to what the current
+	user may see, use the structured read tools instead.
 
 	Comments and multiple statements are rejected outright rather than cleaned
 	up. A blocked keyword is matched on word boundaries against the whole query,
-	so an identifier containing one is refused too — `tabCall Log` trips the
+	so an identifier containing one is refused too, `tabCall Log` trips the
 	`call` keyword, for instance. Dates come back in the format this site has
-	configured for MCP, ISO by default.
+	configured for Synapse, ISO by default.
 
 	Args:
 		query: A single SELECT or WITH statement. No semicolons, no comments.
-		limit: Maximum rows to return. Clamped to the site's MCP row limit.
+		limit: Maximum rows to return. Clamped to the site's Synapse row limit.
 	"""
 
 	entry = audit.current()
@@ -137,7 +142,7 @@ def _check_frappe_layer(query: str):
 	"""Run Frappe's own read-only check as an extra layer, where it applies.
 
 	frappe.utils.safe_exec.check_safe_sql_query only whitelists SELECT and
-	EXPLAIN — it does not understand CTEs, so a valid WITH query fails it. Our
+	EXPLAIN, it does not understand CTEs, so a valid WITH query fails it. Our
 	own guard is strictly stricter on WITH statements, so the upstream check is
 	skipped there rather than being allowed to reject good queries.
 	"""

@@ -1,6 +1,6 @@
 """Tests for the vendored MCP core and value conversion.
 
-Pure stdlib — mcp_core.schema and mcp_tools.serialise import nothing from
+Pure stdlib, mcp_core.schema and mcp_tools.serialise import nothing from
 frappe. These cover the two things a vendored library has to keep working: the
 tool schemas a client is shown, and the argument checking that stands in front
 of every tool body.
@@ -130,6 +130,22 @@ class TestArgumentValidation(unittest.TestCase):
 			pass
 
 		validate_arguments({"rate": 5}, build_input_schema(numeric))
+
+	def test_whole_number_float_satisfies_integer_and_is_coerced(self):
+		def paged(limit: int):
+			pass
+
+		schema = build_input_schema(paged)
+		out = validate_arguments({"limit": 5.0}, schema)
+		self.assertEqual(out["limit"], 5)
+		self.assertIsInstance(out["limit"], int)
+
+	def test_fractional_float_still_rejected_for_integer(self):
+		def paged(limit: int):
+			pass
+
+		with self.assertRaises(InvalidArguments):
+			validate_arguments({"limit": 5.5}, build_input_schema(paged))
 
 	def test_null_allowed_where_optional(self):
 		args = {"doctype": "Task", "name": "T", "values": {}, "filters": None}

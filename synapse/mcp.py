@@ -6,12 +6,12 @@
 Authentication is Frappe's own, so an OAuth2 bearer token, an API key or a desk
 session cookie all work. Frappe 16 publishes OAuth server metadata and supports
 dynamic client registration, which is what lets an MCP client connect without an
-OAuth Client record being made by hand — see the README for the three OAuth
+OAuth Client record being made by hand, see the README for the three OAuth
 Settings switches that has to be turned on.
 
 `allow_guest` is left at False, so an unauthenticated POST is refused by the
-framework before any tool code runs. Everything past that point is per tool:
-a role on the tool itself, then the MCP allowlist, then Frappe's permissions.
+framework before any tool code runs. Everything past that point is per call:
+the Synapse access model (the caller's profiles), then Frappe's permissions.
 
 The server is vendored in synapse/mcp_core rather than installed from
 frappe-mcp; that module's docstring explains why.
@@ -49,7 +49,14 @@ def handle_mcp():
 	This runs before every JSON-RPC call, `ping` and `initialize` included, and
 	importing the tool modules is what fills the registry. Anything heavier than
 	an import here is paid on every single call.
+
+	The built-in tools are imported first, then custom tools contributed by other
+	apps are wired in. Built-ins are registered before that, so a custom tool can
+	never take a built-in tool's name.
 	"""
 
 	import synapse.mcp_tools.documents  # noqa: F401
 	import synapse.mcp_tools.sql  # noqa: F401
+	from synapse import extend
+
+	extend.load_external_tools()

@@ -2,11 +2,11 @@
 # For licence information, please see LICENSE
 """Value conversion between the database and MCP clients.
 
-Pure stdlib, no frappe — unit testable, and cheap enough to run over every cell
+Pure stdlib, no frappe, unit testable, and cheap enough to run over every cell
 of every result. Two directions:
 
 * **Out.** date, datetime, timedelta, Decimal and bytes are not JSON safe. The
-  output format is chosen per site in MCP Settings. ISO is the default because
+  output format is chosen per site in Synapse Settings. ISO is the default because
   it is unambiguous and it is what a model will assume; DD-MM-YYYY is offered
   because plenty of sites want their agent speaking the same dialect as the
   rest of the business.
