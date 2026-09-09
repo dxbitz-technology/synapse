@@ -150,6 +150,7 @@ class Policy:
 	sql_enabled: bool = False
 	custom_enabled: bool = False
 	full_access: bool = False
+	config_writer: bool = False
 	grants: dict[str, frozenset] = field(default_factory=dict)
 	grant_names: dict[str, str] = field(default_factory=dict)
 	denied: dict[str, frozenset] = field(default_factory=dict)
@@ -173,7 +174,15 @@ class Policy:
 			blocked |= set(ACTIONS)
 
 		if wanted in ALWAYS_READ_ONLY:
-			blocked |= set(WRITE_ACTIONS)
+			# A System Manager may create and update these config, schema and
+			# permission DocTypes through MCP, because they can already do so in
+			# the desk. Only WRITE is lifted: delete, submit, cancel and operate
+			# stay blocked for everyone. ALWAYS_DENIED above is never lifted, so
+			# tokens and credentials stay blocked whatever role the caller holds.
+			if self.config_writer:
+				blocked |= set(WRITE_ACTIONS) - {WRITE}
+			else:
+				blocked |= set(WRITE_ACTIONS)
 
 		return frozenset(blocked)
 
