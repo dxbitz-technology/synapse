@@ -70,6 +70,14 @@ Two fixed rules sit above every profile and cannot be overridden:
   Script, Custom DocPerm, Role and User. A user who could edit Custom DocPerm
   could grant themselves anything.
 
+The read-only rule has one opt-in exception. Tick **Allow System Manager Config
+Writes** in Synapse Settings and a caller who holds the System Manager role can
+create and update those config, schema and permission DocTypes through MCP, since
+they can already do so in the desk. It is off by default. Only create and update
+are lifted; delete and run_operation on them stay blocked. The token and
+credential DocTypes above are never affected: they stay blocked for everyone,
+System Manager included.
+
 Synapse Settings also has a site wide **Blocked DocTypes** list. Use it to block
 something that a profile would otherwise allow.
 
