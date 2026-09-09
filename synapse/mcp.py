@@ -9,9 +9,13 @@ dynamic client registration, which is what lets an MCP client connect without an
 OAuth Client record being made by hand, see the README for the three OAuth
 Settings switches that has to be turned on.
 
-`allow_guest` is left at False, so an unauthenticated POST is refused by the
-framework before any tool code runs. Everything past that point is per call:
-the Synapse access model (the caller's profiles), then Frappe's permissions.
+An unauthenticated call is answered with a 401 and a WWW-Authenticate header
+naming the site's OAuth protected-resource metadata, which is what lets an MCP
+client discover how to authenticate and begin the OAuth flow. No tool runs for a
+guest, the endpoint only points the client at the metadata. Everything past a
+real sign-in is per call: the Synapse access model (the caller's profiles), then
+Frappe's permissions. See mcp_core/server.py for the 401 and why a 403 would
+leave a client unable to connect.
 
 The server is vendored in synapse/mcp_core rather than installed from
 frappe-mcp; that module's docstring explains why.

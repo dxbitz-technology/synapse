@@ -223,6 +223,12 @@ Then sign in. A browser opens on the site login page. Any MCP client that speaks
 Streamable HTTP with OAuth works the same way. In Claude Desktop it is Settings,
 Connectors, Add custom connector, with the same URL.
 
+The endpoint answers an unauthenticated call with a 401 and a WWW-Authenticate
+header pointing at the site's OAuth metadata, so a client can discover how to
+authenticate on its own. If a client reports it cannot determine the server
+settings, the usual cause is the three OAuth Settings switches above being off,
+so the metadata is not published.
+
 ## Raw SQL
 
 `run_sql_query` does not use Frappe's permission system. A user in a profile with

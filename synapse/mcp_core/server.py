@@ -99,12 +99,20 @@ class MCP:
 		self._entry_fn: Callable | None = None
 
 	# ── registration ──────────────────────────────────────────────────────────
-	def register(self, *, allow_guest: bool = False):
+	def register(self, *, allow_guest: bool = True):
 		"""Wrap a function as the whitelisted Frappe endpoint for this server.
 
+		allow_guest is True on purpose, and a guest still never reaches a tool.
+		An unauthenticated call is answered with a 401 and a WWW-Authenticate
+		header naming the site's OAuth protected-resource metadata. That 401 is
+		what lets an MCP client discover how to authenticate and begin the OAuth
+		flow. The framework's own 403 for a blocked guest carries no such pointer,
+		and a client shown a 403 gives up with "could not determine the server
+		settings", so the endpoint has to answer the challenge itself.
+
 		The decorated function runs before each request, which is where tool
-		modules get imported. Keep its body to imports, it runs on every
-		JSON-RPC call including `ping`.
+		modules get imported. Keep its body to imports, it runs on every JSON-RPC
+		call including `ping`.
 		"""
 
 		import frappe
@@ -120,6 +128,8 @@ class MCP:
 
 			def wrapper() -> Response:
 				fn()
+				if getattr(frappe.session, "user", "Guest") == "Guest":
+					return _unauthenticated(Response)
 				return self.handle(frappe.request, Response())
 
 			return whitelister(wrapper)
@@ -344,4 +354,34 @@ def _error(response, request_id, code, message):
 	response.data = _dumps(payload)
 	response.mimetype = "application/json"
 	response.status_code = 400
+	return response
+
+
+def _unauthenticated(Response):
+	"""A 401 that tells an MCP client where the OAuth metadata is.
+
+	The MCP authorization spec and RFC 9728 both say an unauthorised request to a
+	protected resource is answered with 401 and a WWW-Authenticate header that
+	names the protected-resource metadata. A client reads that header to find the
+	authorization server and begin the OAuth flow. This is the one response the
+	framework's guest 403 cannot give, so the endpoint gives it here.
+	"""
+
+	try:
+		import frappe
+
+		metadata = frappe.utils.get_url("/.well-known/oauth-protected-resource")
+	except Exception:
+		metadata = "/.well-known/oauth-protected-resource"
+
+	response = Response()
+	response.status_code = 401
+	response.headers["WWW-Authenticate"] = f'Bearer resource_metadata="{metadata}"'
+	response.mimetype = "application/json"
+	response.data = _dumps(
+		{
+			"error": "unauthorized",
+			"error_description": "Authentication required. Fetch the resource metadata named in the WWW-Authenticate header to begin OAuth.",
+		}
+	)
 	return response
