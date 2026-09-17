@@ -58,12 +58,20 @@ def report_text() -> str:
 	lines.append(f"  [{ok if s.enabled else no}] Endpoint enabled")
 	lines.append(f"  [{ok if s.enable_read_tools else no}] Read tools")
 	lines.append(f"  [{'  on  ' if s.enable_write_tools else ' off  '}] Write tools")
-	lines.append(f"  [{'  on  ' if s.enable_sql_tool else ' off  '}] Read-only SQL tool (also needs a profile with Allow SQL)")
-	lines.append(f"  [{'  on  ' if s.get('enable_custom_tools') else ' off  '}] Custom tools from other apps (also needs a profile to list each)")
-	lines.append(f"  [{'  on  ' if s.get('allow_config_writes') else ' off  '}] System Manager config writes (create/update on read-only backstop DocTypes)")
+	lines.append(
+		f"  [{'  on  ' if s.enable_sql_tool else ' off  '}] Read-only SQL tool (also needs a profile with Allow SQL)"
+	)
+	lines.append(
+		f"  [{'  on  ' if s.get('enable_custom_tools') else ' off  '}] Custom tools from other apps (also needs a profile to list each)"
+	)
+	lines.append(
+		f"  [{'  on  ' if s.get('allow_config_writes') else ' off  '}] System Manager config writes (create/update on read-only backstop DocTypes)"
+	)
 	lines.append(f"         Model provider: {settings.model_provider()}")
 	lines.append(f"         Row limit: {settings.row_limit()}   Retention: {settings.retention_days()} days")
-	lines.append("         Row tools present: add_child, set_child_value, set_child_rows, delete_child (write)")
+	lines.append(
+		"         Row tools present: add_child, set_child_value, set_child_rows, delete_child (write)"
+	)
 	lines.append("")
 
 	# ── the backstop ──
@@ -77,7 +85,9 @@ def report_text() -> str:
 	lines.append("")
 
 	# ── profiles, the grant ──
-	profiles = frappe.get_all("Synapse Profile", fields=["name", "enabled", "full_access", "allow_sql"], order_by="name")
+	profiles = frappe.get_all(
+		"Synapse Profile", fields=["name", "enabled", "full_access", "allow_sql"], order_by="name"
+	)
 	enabled_profiles = [p for p in profiles if p.enabled]
 	lines.append(f"Synapse Profiles ({len(enabled_profiles)} enabled of {len(profiles)})")
 	if not enabled_profiles:
@@ -113,7 +123,12 @@ def report_text() -> str:
 	except Exception:
 		tools = {}
 
-	granted = {row.tool for p in profiles for row in frappe.get_doc("Synapse Profile", p.name).get("custom_tools") or [] if row.tool}
+	granted = {
+		row.tool
+		for p in profiles
+		for row in frappe.get_doc("Synapse Profile", p.name).get("custom_tools") or []
+		if row.tool
+	}
 	if not tools:
 		lines.append("         none registered. An app adds them with the synapse_tools hook.")
 	for name in sorted(tools):

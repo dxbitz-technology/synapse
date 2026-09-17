@@ -268,8 +268,7 @@ def redact(value, secret_keys=frozenset()):
 
 	if isinstance(value, dict):
 		return {
-			k: (_REDACTED if _is_secret(k, secret_keys) else redact(v, secret_keys))
-			for k, v in value.items()
+			k: (_REDACTED if _is_secret(k, secret_keys) else redact(v, secret_keys)) for k, v in value.items()
 		}
 
 	if isinstance(value, (list, tuple)):

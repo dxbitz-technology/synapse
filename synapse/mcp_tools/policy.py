@@ -24,13 +24,13 @@ __all__ = [
 	"ALWAYS_READ_ONLY",
 	"CANCEL",
 	"DELETE",
-	"Denied",
 	"OPERATE",
-	"Policy",
 	"READ",
 	"SUBMIT",
 	"WRITE",
 	"WRITE_ACTIONS",
+	"Denied",
+	"Policy",
 	"actions_possible",
 	"check",
 ]
@@ -199,9 +199,7 @@ def check(policy: Policy, action: str, doctype: str) -> str:
 
 	# Backstop first, it overrides any profile grant.
 	if action in policy.blocked_actions(doctype):
-		raise Denied(
-			f"'{doctype}' is blocked for '{action}' by this site's Synapse backstop."
-		)
+		raise Denied(f"'{doctype}' is blocked for '{action}' by this site's Synapse backstop.")
 
 	if action not in policy.granted_actions(doctype):
 		raise Denied(

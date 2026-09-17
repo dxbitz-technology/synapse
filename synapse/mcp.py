@@ -15,6 +15,7 @@ The MCP server is vendored in synapse/mcp_core. See that module for why.
 import synapse
 from synapse.mcp_core import MCP
 
+
 def _record_refusal(tool_name, reason, tool):
 	"""Keep refused calls in the audit trail.
 
@@ -50,8 +51,8 @@ def handle_mcp():
 	never take a built-in tool's name.
 	"""
 
-	import synapse.mcp_tools.documents  # noqa: F401
-	import synapse.mcp_tools.sql  # noqa: F401
+	import synapse.mcp_tools.documents
+	import synapse.mcp_tools.sql
 	from synapse import extend
 
 	extend.load_external_tools()

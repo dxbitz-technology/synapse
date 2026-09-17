@@ -70,7 +70,9 @@ class SynapseProfile(Document):
 
 		if not frappe.db.get_single_value("Synapse Settings", "enable_custom_tools"):
 			frappe.msgprint(
-				_("This profile lists custom tools, but 'Enable Custom Tools' is off in Synapse Settings, so none of them will run."),
+				_(
+					"This profile lists custom tools, but 'Enable Custom Tools' is off in Synapse Settings, so none of them will run."
+				),
 				indicator="orange",
 				alert=True,
 			)
@@ -95,7 +97,9 @@ class SynapseProfile(Document):
 
 		if not frappe.db.get_single_value("Synapse Settings", "enable_write_tools"):
 			frappe.msgprint(
-				_("This profile grants a write action, but 'Enable Write Tools' is off in Synapse Settings, so those actions will be refused."),
+				_(
+					"This profile grants a write action, but 'Enable Write Tools' is off in Synapse Settings, so those actions will be refused."
+				),
 				indicator="orange",
 				alert=True,
 			)
