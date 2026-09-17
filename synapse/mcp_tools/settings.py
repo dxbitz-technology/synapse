@@ -61,6 +61,14 @@ def _build() -> Policy:
 
 	full_access, sql_access, grants, grant_names, custom_tools = _resolve_profiles()
 
+	# A System Manager may write the config, schema and permission DocTypes the
+	# read-only backstop protects, but only when the site has ticked Allow System
+	# Manager Config Writes. Both the switch and the role are required, and even
+	# then the token and credential backstop is never lifted (see policy.py).
+	config_writer = bool(doc.get("allow_config_writes")) and "System Manager" in set(
+		frappe.get_roles(frappe.session.user)
+	)
+
 	return Policy(
 		enabled=bool(doc.enabled),
 		read_enabled=bool(doc.enable_read_tools),
@@ -68,6 +76,7 @@ def _build() -> Policy:
 		sql_enabled=bool(doc.enable_sql_tool) and sql_access,
 		custom_enabled=bool(doc.get("enable_custom_tools")),
 		full_access=full_access,
+		config_writer=config_writer,
 		grants=grants,
 		grant_names=grant_names,
 		denied=denied,

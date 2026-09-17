@@ -1,27 +1,16 @@
 # Copyright (c) 2026, Dxbitz and contributors
 """The document tools: read and write ERPNext data over MCP.
 
-Every tool here runs **as the calling user with Frappe permissions on**. Nothing
-uses ignore_permissions, nothing touches frappe.db directly, and writes go
-through Document.insert/save/submit/cancel so validations, hooks and workflows
-all fire exactly as they would in the desk. An agent using these tools can do
-what its user can do, and no more.
+Every tool runs as the calling user with Frappe permissions on. Nothing uses
+ignore_permissions, and writes go through Document.insert/save/submit/cancel, so
+validations, hooks and workflows fire the same as in the desk. On top sits the
+profile gate in policy.py.
 
-On top of that sits the Synapse access model (policy.py): the DocType and the
-action must be granted by one of the caller's Synapse Profiles, and the site
-backstop must not take it back. See the Access section of the README.
+run_operation calls a document's own method by name. It has its own `operate`
+action, granted per DocType in a profile, which is what makes it safe to expose.
 
-`run_operation` calls a document's own method by name. That is the one tool with
-the reach of arbitrary code, so it is not gated like the others: its own
-`operate` action must be granted per DocType in a profile, which is the allowlist
-that makes it safe to expose at all. Everything it does still runs as the user,
-under Frappe permissions, and is logged.
-
-Deliberately not exposed:
-
-* `frappe.db.set_value`, skips validation and hooks. `set_value` here loads the
-  document and saves it, so a scripted field stays correct.
-* Rename and amend. Add them when a real case turns up, with their own flags.
+Not exposed: frappe.db.set_value (skips validation, set_value here loads and
+saves instead), rename and amend.
 """
 
 import frappe

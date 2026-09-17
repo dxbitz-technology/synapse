@@ -1,35 +1,19 @@
 # Copyright (c) 2026, Dxbitz and contributors
 """The Synapse access model: which DocTypes may be touched, and how.
 
-Pure stdlib, no frappe import, no I/O, so every rule is unit testable without
-a site. settings.py builds a Policy from the calling user's Synapse Profiles and
-the site's Synapse Settings, and hands it here. See tests/test_mcp_policy.py.
+Pure stdlib, no frappe import, so every rule is unit testable without a site.
+settings.py builds a Policy from the caller's Synapse Profiles and the site's
+Synapse Settings and hands it here.
 
-Access is granted by **Synapse Profile** records. A user's reach is the union of
-every enabled profile whose roles they hold, each profile's DocType Access
-grid, or everything if the profile has Full Access. That union is precomputed
-per request into Policy.grants (and Policy.full_access), so the check here needs
-no roles: it is a lookup against the grant the user already resolved to.
+Access is granted by Synapse Profile records: a user's reach is the union of the
+profiles their roles hold, precomputed into Policy.grants and Policy.full_access.
 
-This is one of three gates a call passes through:
-
-1. The endpoint is authenticated (OAuth bearer, API key or session), an
-   unauthenticated POST is refused by the framework before any tool runs.
-2. **This module**, the action is granted for the DocType by the caller's
-   profiles, and is not taken back by the site backstop below.
-3. Frappe's own permission check, because every tool operates as the session
-   user with permissions on. DocType permissions, User Permissions, share rules
-   and submit/cancel rights all still apply.
-
-The backstop is subtractive and always wins over a profile grant:
-
-* **Blocked DocTypes** listed in Synapse Settings, carve-outs no agent may
-  touch whatever its profiles allow.
-* **ALWAYS_DENIED**, never reachable, for any action, listed or not. Tokens,
-  credentials and the plumbing that hands them out, plus Synapse's own control
-  plane, so an agent can never rewrite the gate that governs it.
-* **ALWAYS_READ_ONLY**, readable but never writable. Writing to these is
-  changing the schema, the code or the permission model, not entering data.
+A call passes three gates: the endpoint is authenticated, this module (the
+profile grants the action and the backstop does not take it back), then Frappe's
+own permissions. The backstop always wins: ALWAYS_DENIED (tokens, credentials
+and Synapse's own control plane) is never reachable, ALWAYS_READ_ONLY (schema,
+code and permission DocTypes) is read only, and Blocked DocTypes set on the site
+carve out anything else.
 """
 
 from dataclasses import dataclass, field
@@ -150,6 +134,7 @@ class Policy:
 	sql_enabled: bool = False
 	custom_enabled: bool = False
 	full_access: bool = False
+	config_writer: bool = False
 	grants: dict[str, frozenset] = field(default_factory=dict)
 	grant_names: dict[str, str] = field(default_factory=dict)
 	denied: dict[str, frozenset] = field(default_factory=dict)
@@ -173,7 +158,15 @@ class Policy:
 			blocked |= set(ACTIONS)
 
 		if wanted in ALWAYS_READ_ONLY:
-			blocked |= set(WRITE_ACTIONS)
+			# A System Manager may create and update these config, schema and
+			# permission DocTypes through MCP, because they can already do so in
+			# the desk. Only WRITE is lifted: delete, submit, cancel and operate
+			# stay blocked for everyone. ALWAYS_DENIED above is never lifted, so
+			# tokens and credentials stay blocked whatever role the caller holds.
+			if self.config_writer:
+				blocked |= set(WRITE_ACTIONS) - {WRITE}
+			else:
+				blocked |= set(WRITE_ACTIONS)
 
 		return frozenset(blocked)
 

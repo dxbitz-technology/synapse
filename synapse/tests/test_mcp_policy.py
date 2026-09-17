@@ -199,6 +199,46 @@ class TestBuiltInBackstop(unittest.TestCase):
 			check(full(), OPERATE, "Server Script")
 
 
+class TestConfigWriterException(unittest.TestCase):
+	"""A System Manager may write the read-only config bucket, nothing more.
+
+	The exception lifts only WRITE, only on the ALWAYS_READ_ONLY set. Delete,
+	submit, cancel and operate stay blocked there, and the ALWAYS_DENIED token
+	and credential bucket is never lifted for anyone.
+	"""
+
+	def test_system_manager_may_write_config_doctypes(self):
+		p = full(config_writer=True)
+		for name in ("Workflow", "Custom Field", "Property Setter", "Role", "user permission", "DocType"):
+			with self.subTest(doctype=name):
+				self.assertEqual(check(p, READ, name), name)
+				self.assertEqual(check(p, WRITE, name), name)
+
+	def test_only_write_is_lifted_on_config_doctypes(self):
+		p = full(config_writer=True)
+		for action in (DELETE, OPERATE, SUBMIT, CANCEL):
+			with self.subTest(action=action), self.assertRaises(Denied):
+				check(p, action, "Workflow")
+
+	def test_token_and_control_plane_stay_blocked_for_system_manager(self):
+		p = full(config_writer=True)
+		for name in ("OAuth Client", "Token Cache", "Email Account", "Synapse Settings", "Synapse Profile"):
+			for action in (READ, WRITE, DELETE, OPERATE):
+				with self.subTest(doctype=name, action=action), self.assertRaises(Denied):
+					check(p, action, name)
+
+	def test_non_system_manager_config_doctypes_stay_read_only(self):
+		p = full()  # config_writer defaults to False
+		self.assertEqual(check(p, READ, "Workflow"), "Workflow")
+		with self.assertRaises(Denied):
+			check(p, WRITE, "Workflow")
+
+	def test_exception_does_not_touch_business_doctypes(self):
+		# A business DocType is governed by grants, not the config exception.
+		p = full(config_writer=True)
+		self.assertEqual(check(p, WRITE, "Sales Invoice"), "Sales Invoice")
+
+
 class TestActionsPossible(unittest.TestCase):
 	def test_reflects_switches(self):
 		self.assertEqual(actions_possible(full()), ALL_ACTIONS)

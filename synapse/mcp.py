@@ -1,20 +1,15 @@
 # Copyright (c) 2026, Dxbitz and contributors
-"""The synapse MCP endpoint.
+"""The Synapse MCP endpoint.
 
 	POST https://<site>/api/method/synapse.mcp.handle_mcp
 
-Authentication is Frappe's own, so an OAuth2 bearer token, an API key or a desk
-session cookie all work. Frappe 16 publishes OAuth server metadata and supports
-dynamic client registration, which is what lets an MCP client connect without an
-OAuth Client record being made by hand, see the README for the three OAuth
-Settings switches that has to be turned on.
+Auth is Frappe's own: an OAuth bearer token, an API key or a desk session all
+work. An unauthenticated call gets a 401 with a WWW-Authenticate header pointing
+at the site's OAuth metadata, so a client can set itself up. No tool runs for a
+guest. After sign-in, each call goes through the profile gate, then Frappe's own
+permissions.
 
-`allow_guest` is left at False, so an unauthenticated POST is refused by the
-framework before any tool code runs. Everything past that point is per call:
-the Synapse access model (the caller's profiles), then Frappe's permissions.
-
-The server is vendored in synapse/mcp_core rather than installed from
-frappe-mcp; that module's docstring explains why.
+The MCP server is vendored in synapse/mcp_core. See that module for why.
 """
 
 import synapse
