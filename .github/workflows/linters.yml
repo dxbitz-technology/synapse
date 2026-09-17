@@ -18,6 +18,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install ruff
+      # Pinned so CI matches the ruff the app is developed against. A newer ruff
+      # reformats Markdown code blocks, which this version leaves alone.
+      - run: pip install ruff==0.15.22
       - run: ruff check .
       - run: ruff format --check .
