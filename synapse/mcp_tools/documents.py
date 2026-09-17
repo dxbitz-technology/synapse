@@ -120,9 +120,7 @@ def describe_doctype(doctype: str):
 	doctype = _gate(READ, doctype)
 	meta = frappe.get_meta(doctype)
 
-	fields = [
-		_field_info(df) for df in meta.fields if df.fieldtype not in LAYOUT_FIELDTYPES
-	]
+	fields = [_field_info(df) for df in meta.fields if df.fieldtype not in LAYOUT_FIELDTYPES]
 
 	audit.current().rows(len(fields))
 	return {
@@ -412,10 +410,7 @@ def update_doc(doctype: str, name: str, values: dict):
 	doc.save()
 
 	audit.current().changed(
-		{
-			key: {"from": before.get(key), "to": _out(doc.get(key))}
-			for key in prepared
-		},
+		{key: {"from": before.get(key), "to": _out(doc.get(key))} for key in prepared},
 		secret_keys,
 	)
 	audit.current().rows(1)
@@ -605,7 +600,9 @@ def set_child_value(
 	"""
 
 	doctype, applied = _apply_row_edits(
-		parent_doctype, parent_name, child_field,
+		parent_doctype,
+		parent_name,
+		child_field,
 		[{"row_name": row_name, "changes": changes, "expect": expect}],
 	)
 	name_out, fields = applied[0]
@@ -619,7 +616,9 @@ def set_child_value(
 
 
 @mcp.tool(
-	annotations=ToolAnnotations(title="Set fields on many child rows", readOnlyHint=False, destructiveHint=True),
+	annotations=ToolAnnotations(
+		title="Set fields on many child rows", readOnlyHint=False, destructiveHint=True
+	),
 	enabled=settings.write_tools_enabled,
 )
 @audit.audited(audit.WRITE)
@@ -654,7 +653,9 @@ def set_child_rows(parent_doctype: str, parent_name: str, child_field: str, edit
 	enabled=settings.write_tools_enabled,
 )
 @audit.audited(audit.WRITE)
-def delete_child(parent_doctype: str, parent_name: str, child_field: str, row_name: str, expect: dict | None = None):
+def delete_child(
+	parent_doctype: str, parent_name: str, child_field: str, row_name: str, expect: dict | None = None
+):
 	"""Remove one row from a child table and save the parent.
 
 	Args:
@@ -681,7 +682,12 @@ def delete_child(parent_doctype: str, parent_name: str, child_field: str, row_na
 	doc.save()
 
 	audit.current().rows(1)
-	return {"parent_doctype": doctype, "parent_name": parent_name, "child_field": child_field, "deleted_row": row.name}
+	return {
+		"parent_doctype": doctype,
+		"parent_name": parent_name,
+		"child_field": child_field,
+		"deleted_row": row.name,
+	}
 
 
 # ── careful text replace ──────────────────────────────────────────────────────
@@ -999,9 +1005,7 @@ def _apply_row_edits(parent_doctype: str, parent_name: str, child_field: str, ed
 		prepared = _prepare_child_changes(child_doctype, edit.get("changes"))
 
 		plan.append((row, prepared))
-		asked.append(
-			{"row_name": row.name, "changes": edit.get("changes"), "expect": edit.get("expect")}
-		)
+		asked.append({"row_name": row.name, "changes": edit.get("changes"), "expect": edit.get("expect")})
 
 	# Record what was asked, so the log shows which edits asserted their state.
 	audit.current().sent({"child_field": child_field, "edits": asked}, secret_keys)
@@ -1036,9 +1040,7 @@ def _gate(action: str, doctype: str) -> str:
 	meta = _meta(doctype)
 
 	if meta.istable:
-		raise Denied(
-			f"'{meta.name}' is a child table. Read or write it through its parent document."
-		)
+		raise Denied(f"'{meta.name}' is a child table. Read or write it through its parent document.")
 
 	resolved = check(settings.get_policy(), action, meta.name)
 	audit.current().target(resolved)

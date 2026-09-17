@@ -37,9 +37,7 @@ def user_is_covered(user: str | None = None) -> bool:
 	if not roles:
 		return False
 
-	enabled = frappe.get_all(
-		"Synapse Profile", filters={"enabled": 1}, pluck="name", ignore_permissions=True
-	)
+	enabled = frappe.get_all("Synapse Profile", filters={"enabled": 1}, pluck="name", ignore_permissions=True)
 	if not enabled:
 		return False
 

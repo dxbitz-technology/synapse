@@ -55,7 +55,9 @@ def show(profile=None):
 	rows = doc.get("doctype_access") or []
 
 	print(f"Synapse Profile '{doc.name}' on {frappe.local.site}")
-	print(f"Enabled: {bool(doc.enabled)}   Full Access: {bool(doc.full_access)}   Allow SQL: {bool(doc.allow_sql)}")
+	print(
+		f"Enabled: {bool(doc.enabled)}   Full Access: {bool(doc.full_access)}   Allow SQL: {bool(doc.allow_sql)}"
+	)
 	print(f"Roles: {', '.join(r.role for r in doc.get('roles') or []) or 'none'}")
 
 	if doc.full_access:

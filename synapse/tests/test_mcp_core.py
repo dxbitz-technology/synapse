@@ -159,15 +159,11 @@ class TestArgumentValidation(unittest.TestCase):
 class TestSerialisation(unittest.TestCase):
 	def test_iso_is_the_default(self):
 		self.assertEqual(to_client(datetime.date(2026, 8, 19)), "2026-08-19")
-		self.assertEqual(
-			to_client(datetime.datetime(2026, 8, 19, 14, 3, 5)), "2026-08-19 14:03:05"
-		)
+		self.assertEqual(to_client(datetime.datetime(2026, 8, 19, 14, 3, 5)), "2026-08-19 14:03:05")
 
 	def test_day_first_when_the_site_asks_for_it(self):
 		self.assertEqual(to_client(datetime.date(2026, 8, 19), DMY), "19-08-2026")
-		self.assertEqual(
-			to_client(datetime.datetime(2026, 8, 19, 14, 3, 5), DMY), "19-08-2026 14:03:05"
-		)
+		self.assertEqual(to_client(datetime.datetime(2026, 8, 19, 14, 3, 5), DMY), "19-08-2026 14:03:05")
 
 	def test_decimal_and_timedelta(self):
 		self.assertEqual(to_client(decimal.Decimal("10.50")), 10.5)

@@ -167,8 +167,15 @@ class TestBuiltInBackstop(unittest.TestCase):
 
 	def test_credential_doctypes_are_blocked_outright(self):
 		p = full()
-		for name in ("OAuth Bearer Token", "oauth client", "Token Cache", "Social Login Key",
-					 "Connected App", "Email Account", "Access Log"):
+		for name in (
+			"OAuth Bearer Token",
+			"oauth client",
+			"Token Cache",
+			"Social Login Key",
+			"Connected App",
+			"Email Account",
+			"Access Log",
+		):
 			for action in (READ, WRITE, DELETE, OPERATE):
 				with self.subTest(doctype=name, action=action), self.assertRaises(Denied):
 					check(p, action, name)
@@ -176,16 +183,30 @@ class TestBuiltInBackstop(unittest.TestCase):
 	def test_control_plane_doctypes_are_blocked_outright(self):
 		# An agent must never edit the gate that governs it, even under full access.
 		p = full()
-		for name in ("Synapse Settings", "synapse profile", "Synapse Doctype Access",
-					 "Synapse Denied DocType", "Synapse Profile Role", "Synapse Log"):
+		for name in (
+			"Synapse Settings",
+			"synapse profile",
+			"Synapse Doctype Access",
+			"Synapse Denied DocType",
+			"Synapse Profile Role",
+			"Synapse Log",
+		):
 			for action in (READ, WRITE, DELETE, OPERATE):
 				with self.subTest(doctype=name, action=action), self.assertRaises(Denied):
 					check(p, action, name)
 
 	def test_schema_and_permission_doctypes_are_read_only(self):
 		p = full()
-		for name in ("DocType", "Custom Field", "Custom DocPerm", "Server Script", "Role", "User",
-					 "Property Setter", "System Settings"):
+		for name in (
+			"DocType",
+			"Custom Field",
+			"Custom DocPerm",
+			"Server Script",
+			"Role",
+			"User",
+			"Property Setter",
+			"System Settings",
+		):
 			with self.subTest(doctype=name):
 				self.assertEqual(check(p, READ, name), name)
 

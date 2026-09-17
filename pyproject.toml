@@ -23,9 +23,9 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/erpuae/synapse"
-Repository = "https://github.com/erpuae/synapse"
-Issues = "https://github.com/erpuae/synapse/issues"
+Homepage = "https://github.com/dxbitz-technology/synapse"
+Repository = "https://github.com/dxbitz-technology/synapse"
+Issues = "https://github.com/dxbitz-technology/synapse/issues"
 
 [build-system]
 requires = ["flit_core >=3.4,<4"]
