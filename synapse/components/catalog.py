@@ -495,5 +495,6 @@ def seed():
 			doc = frappe.get_doc({"doctype": "Synapse Component", "key": c["key"], **values})
 			doc.insert(ignore_permissions=True)
 
-	frappe.db.commit()
+	# Seeder run from a patch or bench, commit the seeded rows.
+	frappe.db.commit()  # nosemgrep
 	print(f"Seeded {len(COMPONENTS)} Synapse Component records on {frappe.local.site}.")
