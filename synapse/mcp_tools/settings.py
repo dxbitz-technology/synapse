@@ -175,7 +175,19 @@ def operate_tools_enabled() -> bool:
 
 def sql_tool_enabled() -> bool:
 	policy = get_policy()
-	return policy.enabled and policy.sql_enabled
+	if not (policy.enabled and policy.sql_enabled):
+		return False
+
+	# Fail closed where there is no read-only database user. Without it the SQL
+	# tool falls back to the site's read-write connection and the text guard is
+	# the only boundary, which is not safe by default on a hosted platform where
+	# a customer cannot create that user. Require an explicit site_config opt-in
+	# (mcp_sql_allow_guard_only) to run guard-only.
+	from synapse.mcp_tools import connection
+
+	if connection.is_configured():
+		return True
+	return bool(frappe.conf.get("mcp_sql_allow_guard_only"))
 
 
 def custom_tool_enabled(name: str) -> bool:
