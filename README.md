@@ -300,10 +300,13 @@ Then in `site_config.json` (never in the repo):
 }
 ```
 
-Without those keys, the tool falls back to the site's normal read write
-connection and rolls back after every query. It works, but then the text guard
-is the only boundary. On hosted platforms where a second database user is not
-possible, that fallback is the only option. Decide before you enable SQL there.
+Without those keys the SQL tool stays off, even when the switch and a profile
+allow it. This is deliberate: with no read-only user the tool would fall back to
+the site's read-write connection with a rollback, and then the text guard is the
+only boundary, which is not safe by default. On a hosted platform where a second
+database user is not possible, accept that trade-off explicitly by setting
+`mcp_sql_allow_guard_only: true` in `site_config.json`. Only then does guard-only
+SQL run.
 
 Add more blocked tables per site with `mcp_sql_blocked_tables` in
 `site_config.json`. MariaDB only. `connection.py` raises `NotImplementedError` on
@@ -325,6 +328,16 @@ refused write still leaves a record. System Manager can read and report on the
 log but cannot create or edit rows from the desk. A daily job drops rows past the
 retention window. Untick *Log Field Values* if the data itself must not be copied
 into the log. Password fields are masked either way.
+
+## Dashboards
+
+Alongside the MCP server, Synapse ships a component library and a small page
+builder for the desk. Lay out charts, tables, number cards, lists, progress bars
+and more on a responsive 12-column grid. The charts wrap Frappe's own
+frappe-charts, so they match the desk's look. A Synapse Page holds the layout,
+each block renders from the data baked into it, and you view it at
+`/app/synapse-view/<name>`. Every component renders purely from its config and
+data, with nothing fetched at view time.
 
 ## Tests
 

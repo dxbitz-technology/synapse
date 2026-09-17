@@ -144,10 +144,15 @@ def report_text() -> str:
 	lines.append("Read-only database user (SQL tool only)")
 	if connection.is_configured():
 		lines.append(f"  [{ok}] site_config has mcp_ro_db_user / mcp_ro_db_password")
+	elif frappe.conf.get("mcp_sql_allow_guard_only"):
+		lines.append(
+			f"  [{no}] No read-only user, but mcp_sql_allow_guard_only is set, so the SQL tool "
+			"runs guard-only against the read-write connection. The text guard is the only boundary."
+		)
 	else:
 		lines.append(
-			f"  [{no}] Not configured. The SQL tool would fall back to the site's read-write "
-			"connection with a rollback, leaving guard.py as the only boundary."
+			f"  [{no}] Not configured, so the SQL tool stays OFF (fail closed). Set a read-only "
+			"user, or set mcp_sql_allow_guard_only in site_config to accept guard-only SQL."
 		)
 
 	return "\n".join(lines)
