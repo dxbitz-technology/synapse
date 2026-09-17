@@ -1,9 +1,8 @@
-# Synapse
+# Synapse: MCP server for Frappe and ERPNext
 
-Synapse is an [MCP](https://modelcontextprotocol.io) server for Frappe and
-ERPNext. It lets an AI client read and write a site over OAuth. The client acts
-as a real Frappe user and stays within that user's permissions. Every call is
-written to an audit log.
+Synapse lets an AI client (Claude, or any other [MCP](https://modelcontextprotocol.io)
+client) read and write your Frappe or ERPNext site over OAuth. The client acts as
+a real user, stays inside that user's permissions, and every call is logged.
 
 ```
 POST https://<your-site>/api/method/synapse.mcp.handle_mcp
@@ -221,21 +220,46 @@ DocTypes and actions those roles may use. Reading needs only a read tick.
 Tools*. Reads work at this point. For writes, also tick *Enable Write Tools*. If
 that switch is off, the endpoint stays read only whatever a profile grants.
 
-## Connecting a client
+## Connect a client
+
+Once a profile is set up and the switches are on, point your MCP client at the
+endpoint.
+
+**Claude Code:**
 
 ```bash
 claude mcp add --transport http mysite https://<your-site>/api/method/synapse.mcp.handle_mcp
 ```
 
-Then sign in. A browser opens on the site login page. Any MCP client that speaks
-Streamable HTTP with OAuth works the same way. In Claude Desktop it is Settings,
-Connectors, Add custom connector, with the same URL.
+Then run any prompt. The first time, a browser opens on your site login. Sign in
+as the user the agent should act as. That is the whole setup.
+
+**Claude Desktop:** Settings > Connectors > Add custom connector, and paste the
+same URL.
+
+Any MCP client that speaks Streamable HTTP with OAuth connects the same way.
+
+### See what it can do
+
+After connecting, paste this into your client to have it map its own access:
+
+```
+Using the "mysite" MCP server, call list_available_doctypes, then describe two
+or three of the DocTypes you can reach. Tell me in plain English what you can
+read, create, update, submit, delete or run for me on this site, and list
+anything you have a tool for but cannot use yet and why.
+```
+
+It calls the read tools and comes back with exactly what it can do for that
+user, which depends on their profile and their Frappe permissions. Swap
+`mysite` for whatever name you gave the server.
+
+### If the client cannot find the server
 
 The endpoint answers an unauthenticated call with a 401 and a WWW-Authenticate
-header pointing at the site's OAuth metadata, so a client can discover how to
-authenticate on its own. If a client reports it cannot determine the server
-settings, the usual cause is the three OAuth Settings switches above being off,
-so the metadata is not published.
+header pointing at the site OAuth metadata, so a client can set itself up. If it
+says it cannot determine the server settings, the three OAuth switches (see
+Setting it up) are off, so there is no metadata to read.
 
 ## Raw SQL
 

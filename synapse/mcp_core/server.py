@@ -1,18 +1,11 @@
 # Copyright (c) 2026, Dxbitz and contributors
 """JSON-RPC dispatch and the tool registry for the vendored MCP core.
 
-See synapse/mcp_core/__init__.py for why this is vendored rather than
-installed. Adapted from frappe/frappe-mcp (MIT).
-
-The one behavioural addition over upstream is per-tool authorization. A tool
-declares the roles allowed to call it:
-
-	@mcp.tool(roles=["MCP Agent"])
-	def get_doc(...): ...
-
-A user who does not hold one of them never sees the tool in `tools/list` and is
-refused by `tools/call`. Hiding it matters as much as refusing it, a listed
-tool the model cannot call becomes a retry loop.
+See synapse/mcp_core/__init__.py for why this is vendored. Adapted from
+frappe/frappe-mcp (MIT). It adds optional per-tool roles: a tool can list the
+roles allowed to call it, and is then hidden from tools/list and refused by
+tools/call for anyone else. Synapse gates in the tools instead, so it passes no
+roles here.
 """
 
 import json
