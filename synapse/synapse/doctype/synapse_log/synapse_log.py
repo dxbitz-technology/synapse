@@ -22,4 +22,5 @@ def delete_old_logs():
 
 	cutoff = frappe.utils.add_days(frappe.utils.nowdate(), -retention_days())
 	frappe.db.delete("Synapse Log", {"creation": ("<", cutoff)})
-	frappe.db.commit()
+	# Scheduled job, commit its own deletion.
+	frappe.db.commit()  # nosemgrep

@@ -223,7 +223,11 @@ COMPONENTS = [
 		"note": "A geographic map needs a separate mapping library (Leaflet or similar). Out of Phase 1 scope, decide the library before building.",
 		"description": "A geographic map. Not part of frappe-charts and not built in Phase 1.",
 		"data_template": _EMPTY_DATA,
-		"options_schema": {"type": "object", "additionalProperties": False, "properties": {"title": {"type": "string"}}},
+		"options_schema": {
+			"type": "object",
+			"additionalProperties": False,
+			"properties": {"title": {"type": "string"}},
+		},
 	},
 	# Group B: widgets
 	{
@@ -274,7 +278,19 @@ COMPONENTS = [
 						"properties": {
 							"key": {"type": "string"},
 							"label": {"type": "string"},
-							"type": {"type": "string", "enum": ["text", "link", "currency", "int", "float", "number", "percent", "date"]},
+							"type": {
+								"type": "string",
+								"enum": [
+									"text",
+									"link",
+									"currency",
+									"int",
+									"float",
+									"number",
+									"percent",
+									"date",
+								],
+							},
 							"precision": {"type": "number"},
 						},
 					},
@@ -392,7 +408,11 @@ COMPONENTS = [
 				"body": {"type": "string"},
 			},
 		},
-		"options_schema": {"type": "object", "additionalProperties": False, "properties": {"title": {"type": "string"}}},
+		"options_schema": {
+			"type": "object",
+			"additionalProperties": False,
+			"properties": {"title": {"type": "string"}},
+		},
 	},
 	{
 		"key": "text_block",
@@ -415,7 +435,11 @@ COMPONENTS = [
 		"is_layout": True,
 		"description": "A divider that starts a new section, with an optional title. Carries no data.",
 		"data_template": _EMPTY_DATA,
-		"options_schema": {"type": "object", "additionalProperties": False, "properties": {"title": {"type": "string"}}},
+		"options_schema": {
+			"type": "object",
+			"additionalProperties": False,
+			"properties": {"title": {"type": "string"}},
+		},
 	},
 	{
 		"key": "column_break",
@@ -433,7 +457,11 @@ COMPONENTS = [
 		"is_layout": True,
 		"description": "Vertical space of a given height in pixels. Carries no data.",
 		"data_template": _EMPTY_DATA,
-		"options_schema": {"type": "object", "additionalProperties": False, "properties": {"height": {"type": "number"}}},
+		"options_schema": {
+			"type": "object",
+			"additionalProperties": False,
+			"properties": {"height": {"type": "number"}},
+		},
 	},
 ]
 
@@ -467,5 +495,6 @@ def seed():
 			doc = frappe.get_doc({"doctype": "Synapse Component", "key": c["key"], **values})
 			doc.insert(ignore_permissions=True)
 
-	frappe.db.commit()
+	# Seeder run from a patch or bench, commit the seeded rows.
+	frappe.db.commit()  # nosemgrep
 	print(f"Seeded {len(COMPONENTS)} Synapse Component records on {frappe.local.site}.")

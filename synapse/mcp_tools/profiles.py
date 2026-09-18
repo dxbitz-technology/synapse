@@ -25,6 +25,7 @@ credential DocType is never listed and a schema/code DocType is listed read only
 """
 
 import frappe
+from frappe import _
 
 from synapse.mcp_tools.policy import ACTIONS, ALWAYS_DENIED, ALWAYS_READ_ONLY
 
@@ -42,7 +43,7 @@ def _norm(name) -> str:
 
 def _profile(name):
 	if not name:
-		frappe.throw("Give a profile name, for example {'profile': 'Reporting'}.")
+		frappe.throw(_("Give a profile name, for example {'profile': 'Reporting'}."))
 	if not frappe.db.exists(PROFILE_DOCTYPE, name):
 		frappe.throw(f"'{name}' is not a Synapse Profile. Create it first in the desk.")
 	return frappe.get_doc(PROFILE_DOCTYPE, name)
@@ -55,7 +56,9 @@ def show(profile=None):
 	rows = doc.get("doctype_access") or []
 
 	print(f"Synapse Profile '{doc.name}' on {frappe.local.site}")
-	print(f"Enabled: {bool(doc.enabled)}   Full Access: {bool(doc.full_access)}   Allow SQL: {bool(doc.allow_sql)}")
+	print(
+		f"Enabled: {bool(doc.enabled)}   Full Access: {bool(doc.full_access)}   Allow SQL: {bool(doc.allow_sql)}"
+	)
 	print(f"Roles: {', '.join(r.role for r in doc.get('roles') or []) or 'none'}")
 
 	if doc.full_access:
@@ -124,7 +127,7 @@ def grant(profile=None, doctypes=None, actions="read", dry_run=0):
 	names = [n.strip() for n in str(doctypes or "").split(",") if n.strip()]
 
 	if not names:
-		frappe.throw("Give at least one DocType.")
+		frappe.throw(_("Give at least one DocType."))
 
 	rows = []
 	for name in names:
@@ -163,7 +166,8 @@ def clear(profile=None, dry_run=0):
 
 	doc.set("doctype_access", [])
 	doc.save()
-	frappe.db.commit()
+	# Bench utility, commit the change it just made.
+	frappe.db.commit()  # nosemgrep
 	print(f"Removed {count} access row(s) from '{doc.name}'.")
 
 
@@ -188,7 +192,8 @@ def _apply(doc, rows, dry_run, label: str, merge: bool = False):
 			row.set(f"allow_{action}", 1 if action in granted else 0)
 
 	doc.save()
-	frappe.db.commit()
+	# Bench utility, commit the change it just made.
+	frappe.db.commit()  # nosemgrep
 
 	print(f"Profile '{doc.name}' now lists {len(doc.doctype_access)} DocType(s).")
 	print("Reads work once 'Enable Synapse Endpoint' and 'Enable Read Tools' are ticked in Synapse Settings")

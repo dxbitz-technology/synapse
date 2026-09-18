@@ -22,7 +22,7 @@ import re
 
 from synapse.mcp_tools.policy import ALWAYS_DENIED
 
-__all__ = ["UnsafeQuery", "MAX_QUERY_LENGTH", "BLOCKED_KEYWORDS", "BLOCKED_TABLES", "validate_read_only"]
+__all__ = ["BLOCKED_KEYWORDS", "BLOCKED_TABLES", "MAX_QUERY_LENGTH", "UnsafeQuery", "validate_read_only"]
 
 
 MAX_QUERY_LENGTH = 5000
@@ -86,7 +86,7 @@ BLOCKED_KEYWORDS = (
 # `__auth` is a framework table, not a DocType, so it is added explicitly.
 # Extend per site with the site_config key `mcp_sql_blocked_tables` rather than
 # editing this tuple or ALWAYS_DENIED.
-BLOCKED_TABLES = ("__auth",) + tuple(f"tab{name}" for name in sorted(ALWAYS_DENIED))
+BLOCKED_TABLES = ("__auth", *(f"tab{name}" for name in sorted(ALWAYS_DENIED)))
 
 _COMMENT_MARKERS = ("--", "#", "/*", "*/")
 
@@ -125,16 +125,14 @@ def validate_read_only(query: str, extra_blocked_tables: tuple | list | None = N
 	# 1. Length cap, checked first so a pathological string is cheap to refuse.
 	if len(stripped) > MAX_QUERY_LENGTH:
 		raise UnsafeQuery(
-			f"Rule 'length': query is {len(stripped)} characters, "
-			f"the limit is {MAX_QUERY_LENGTH}."
+			f"Rule 'length': query is {len(stripped)} characters, the limit is {MAX_QUERY_LENGTH}."
 		)
 
 	# 2. No comments. Rejected outright, never stripped.
 	for marker in _COMMENT_MARKERS:
 		if marker in stripped:
 			raise UnsafeQuery(
-				f"Rule 'comment': query contains '{marker}'. "
-				"Comments are not allowed, resubmit without them."
+				f"Rule 'comment': query contains '{marker}'. Comments are not allowed, resubmit without them."
 			)
 
 	# 3. A single statement only. One trailing semicolon is tolerated.
@@ -153,8 +151,7 @@ def validate_read_only(query: str, extra_blocked_tables: tuple | list | None = N
 	if not head.startswith(_ALLOWED_STATEMENTS):
 		first_word = (head.split(None, 1) or [""])[0] or "?"
 		raise UnsafeQuery(
-			f"Rule 'statement type': query starts with '{first_word}'. "
-			"Only SELECT and WITH are permitted."
+			f"Rule 'statement type': query starts with '{first_word}'. Only SELECT and WITH are permitted."
 		)
 
 	# 5. Blocked keywords, on word boundaries.

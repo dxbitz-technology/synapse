@@ -91,7 +91,7 @@ def run_sql_query(query: str, limit: int | None = None):
 
 	truncated = False
 	if len(rows) > applied_limit:
-		rows = rows[: applied_limit]
+		rows = rows[:applied_limit]
 		truncated = True
 	elif not had_limit and len(rows) == applied_limit:
 		truncated = True
@@ -128,8 +128,12 @@ def _run_fallback(query: str, limit: int):
 	"""
 
 	try:
-		frappe.db.sql(f"SET SESSION max_statement_time = {float(TIMEOUT_SECONDS)}")
-		rows = frappe.db.sql(query, as_dict=True)
+		# Parameterised so nothing is interpolated into the SQL text. The value is
+		# a fixed float either way, this just keeps the query a literal string.
+		frappe.db.sql("SET SESSION max_statement_time = %s", (float(TIMEOUT_SECONDS),))
+		# query is validated read-only by guard.py before it reaches here and the
+		# whole call is rolled back, running arbitrary read-only SQL is the tool.
+		rows = frappe.db.sql(query, as_dict=True)  # nosemgrep
 	finally:
 		frappe.db.rollback()
 

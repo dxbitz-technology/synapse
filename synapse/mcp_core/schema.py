@@ -154,9 +154,7 @@ def split_docstring(doc: str | None) -> tuple[str, dict[str, str]]:
 		else:
 			return doc, {}
 
-	args = {
-		name: " ".join(text.strip().split()) for name, text in _ARG_RE.findall(args_block)
-	}
+	args = {name: " ".join(text.strip().split()) for name, text in _ARG_RE.findall(args_block)}
 	return description.strip(), args
 
 
@@ -214,9 +212,7 @@ def _check_type(key: str, value: Any, spec: dict):
 		return int(value)
 
 	if not isinstance(value, allowed):
-		raise InvalidArguments(
-			f"Argument '{key}' must be {' or '.join(names)}, got {type(value).__name__}."
-		)
+		raise InvalidArguments(f"Argument '{key}' must be {' or '.join(names)}, got {type(value).__name__}.")
 
 	return value
 

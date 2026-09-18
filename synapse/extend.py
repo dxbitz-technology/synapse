@@ -41,7 +41,7 @@ import functools
 from collections.abc import Callable
 from dataclasses import dataclass
 
-__all__ = ["tool", "registered_tools", "load_external_tools"]
+__all__ = ["load_external_tools", "registered_tools", "tool"]
 
 
 @dataclass
