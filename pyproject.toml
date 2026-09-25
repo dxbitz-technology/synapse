@@ -20,7 +20,10 @@ classifiers = [
 dependencies = ["jsonschema>=4.18,<5"]
 
 [project.urls]
-Homepage = "https://github.com/dxbitz-technology/synapse"
+Documentation = "https://github.com/dxbitz-technology/synapse/wiki/Documentation"
+"Privacy Policy" = "https://github.com/dxbitz-technology/synapse/wiki/Privacy-Policy"
+"Terms of Service" = "https://github.com/dxbitz-technology/synapse/wiki/Terms-of-Service"
+Homepage = "https://github.com/dxbitz-technology/synapse/wiki"
 Repository = "https://github.com/dxbitz-technology/synapse"
 Issues = "https://github.com/dxbitz-technology/synapse/issues"
 
