@@ -1,21 +1,5 @@
 # Copyright (c) 2026, Dxbitz and contributors
-# For licence information, please see LICENSE
-"""Value conversion between the database and MCP clients.
-
-Pure stdlib, no frappe, unit testable, and cheap enough to run over every cell
-of every result. Two directions:
-
-* **Out.** date, datetime, timedelta, Decimal and bytes are not JSON safe. The
-  output format is chosen per site in Synapse Settings. ISO is the default because
-  it is unambiguous and it is what a model will assume; DD-MM-YYYY is offered
-  because plenty of sites want their agent speaking the same dialect as the
-  rest of the business.
-* **In.** `to_db_date` accepts either format and returns what the database
-  wants, whatever the site has chosen for output. That matters most on a
-  DD-MM-YYYY site: a model doing read-modify-write hands back exactly what it
-  was given, and without this every round trip would either fail or, worse,
-  silently swap day and month.
-"""
+"""Value conversion between the database and MCP clients."""
 
 import datetime
 import decimal
@@ -36,9 +20,6 @@ class Formats:
 ISO = Formats(date="%Y-%m-%d", datetime="%Y-%m-%d %H:%M:%S")
 DMY = Formats(date="%d-%m-%Y", datetime="%d-%m-%Y %H:%M:%S")
 
-# DD-MM-YYYY, optionally followed by a time. Anchored, so nothing else matches.
-# A two-digit first group above 12 could only ever be a day, and ISO dates start
-# with four digits, so the two forms cannot be confused for one another.
 _DMY_RE = re.compile(
 	r"^(?P<d>\d{2})-(?P<m>\d{2})-(?P<y>\d{4})"
 	r"(?:[ T](?P<time>\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?))?$"

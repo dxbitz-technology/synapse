@@ -17,10 +17,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
 
-# No dependencies on purpose. The MCP server is vendored in synapse/mcp_core —
-# see that package's docstring. `bench install-app synapse` is the whole
-# installation, and `bench update` stays safe on any bench carrying this app.
-dependencies = []
+dependencies = ["jsonschema>=4.18,<5"]
 
 [project.urls]
 Homepage = "https://github.com/dxbitz-technology/synapse"

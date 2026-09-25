@@ -1,18 +1,5 @@
 # Copyright (c) 2026, Dxbitz and contributors
-"""Desk-facing helpers for the Synapse console page and the user shortcut.
-
-None of this is part of the MCP endpoint. It backs two desk surfaces:
-
-* the admin console (Page `synapse`, System Manager only), and
-* the "Connect to Synapse" shortcut on a user's own profile, shown only when
-  one of their roles is carried by a Synapse Profile.
-
-The coverage check reads Synapse Profile with ignore_permissions on purpose: a
-regular user cannot read that DocType, but they must still be told whether they
-are covered and shown their own connect link. It returns a boolean and a URL,
-never any profile data, so it leaks nothing a user could not infer by trying to
-connect.
-"""
+"""Desk-facing helpers for the Synapse console page and the user shortcut."""
 
 import frappe
 
@@ -50,14 +37,12 @@ def user_is_covered(user: str | None = None) -> bool:
 	return bool(roles & set(profile_roles))
 
 
-# ── apps-screen gates ─────────────────────────────────────────────────────────
 def has_admin_permission() -> bool:
 	"""Gate for the Synapse tile on the /apps screen, System Manager only."""
 
 	return ADMIN_ROLE in frappe.get_roles()
 
 
-# ── whitelisted, for the desk JS ──────────────────────────────────────────────
 @frappe.whitelist()
 def connect_context() -> dict:
 	"""What the connect shortcut and the console need to render.
@@ -75,16 +60,12 @@ def connect_context() -> dict:
 
 @frappe.whitelist()
 def get_page_layout(name: str) -> dict:
-	"""Return one Synapse Page as a render model for the grid.
-
-	Reads the page as the current user (get_doc enforces the read permission),
-	parses each block's config and frozen_data from JSON, and hands back the
-	shape synapse.library.render_page expects. This reads the page definition,
-	not any data source: the data is baked into each block.
-	"""
+	"""Return one Synapse Page as a render model for the grid."""
 
 	doc = frappe.get_doc("Synapse Page", name)
 	doc.check_permission("read")
+	if not doc.enabled:
+		frappe.throw(frappe._("This page is disabled."), frappe.PermissionError)
 
 	blocks = []
 	for block in doc.get("blocks") or []:

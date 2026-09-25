@@ -1,23 +1,10 @@
 // Copyright (c) 2026, Dxbitz and contributors
-// Group A: chart elements. Every renderer here is a thin adapter over
-// frappe-charts (the same library the Frappe desk draws with), fed our
-// normalised shape. We never reimplement a chart the library already draws, so
-// a Synapse chart and a desk chart of the same type look the same and any
-// frappe-charts upgrade carries through.
-//
-// frappe-charts 2.0.0-rc27 (bundled with Frappe 16) draws: line, bar, pie,
-// donut, percentage, heatmap and axis-mixed. It does NOT draw scatter, and it
-// has no horizontal-bar option. Those two, like map, render as a labelled
-// not-implemented placeholder rather than a faked look.
 
 import { chartsAvailable, clearEl, placeholder, resolveColors } from "./theme.js";
 
 const DEFAULT_HEIGHT = 240;
 
-// ── shared builders ───────────────────────────────────────────────────────────
 
-// Mount a frappe-charts config on the element, replacing any previous chart so
-// no orphan SVG is left behind.
 function mount(el, cfg) {
 	clearEl(el);
 	try {
@@ -28,9 +15,6 @@ function mount(el, cfg) {
 	return el.__synapseChart;
 }
 
-// Options every axis and part-to-whole chart shares. Only keys in the
-// options_schema are read; anything else on config is ignored, never passed
-// blindly into frappe-charts.
 function commonOptions(config, el) {
 	const cfg = {};
 	const colors = resolveColors(config.colors, el);
@@ -51,7 +35,6 @@ function validAxisData(data) {
 	);
 }
 
-// Build an axis chart (bar, line, area, mixed) from {labels, series, axes}.
 function axisChart(el, config, data, type, perDatasetType) {
 	if (!chartsAvailable()) return placeholder(el, "Charts are not loaded on this page");
 	if (!validAxisData(data)) {
@@ -70,7 +53,6 @@ function axisChart(el, config, data, type, perDatasetType) {
 		...commonOptions(config, el),
 	};
 
-	// Axis passthroughs, all optional and all real frappe-charts keys.
 	const axisOptions = {};
 	if (config.x_axis_mode) axisOptions.xAxisMode = config.x_axis_mode; // "span" | "tick"
 	if (config.y_axis_mode) axisOptions.yAxisMode = config.y_axis_mode;
@@ -94,8 +76,6 @@ function axisChart(el, config, data, type, perDatasetType) {
 
 	if (data.axes && (data.axes.x || data.axes.y)) {
 		cfg.axisOptions = cfg.axisOptions || {};
-		// frappe-charts has no axis title; we keep the labels on the config for
-		// the tooltip formatter and any future use, without inventing UI.
 	}
 
 	return mount(el, cfg);
@@ -105,7 +85,6 @@ function validPartData(data) {
 	return data && Array.isArray(data.labels) && Array.isArray(data.values) && data.values.length > 0;
 }
 
-// Build a part-to-whole chart (pie, donut, percentage) from {labels, values}.
 function partChart(el, config, data, type) {
 	if (!chartsAvailable()) return placeholder(el, "Charts are not loaded on this page");
 	if (!validPartData(data)) {
@@ -122,7 +101,6 @@ function partChart(el, config, data, type) {
 	return mount(el, cfg);
 }
 
-// ── Group A renderers ─────────────────────────────────────────────────────────
 
 export function bar_chart(el, config, data) {
 	return axisChart(el, config, data, "bar", false);
@@ -133,12 +111,10 @@ export function line_chart(el, config, data) {
 }
 
 export function area_chart(el, config, data) {
-	// An area chart is a line with the region under it filled.
 	return axisChart(el, { ...config, region_fill: true }, data, "line", false);
 }
 
 export function mixed_chart(el, config, data) {
-	// axis-mixed reads each series' own chartType ("bar" or "line").
 	return axisChart(el, config, data, "axis-mixed", true);
 }
 
@@ -175,9 +151,6 @@ export function heatmap(el, config, data) {
 	return mount(el, cfg);
 }
 
-// ── not native in this frappe-charts build ────────────────────────────────────
-// Kept in the registry so the key resolves, but drawn as a flagged placeholder
-// rather than a faked look. See the module header.
 
 export function scatter_chart(el /* , config, data */) {
 	return placeholder(
@@ -199,6 +172,6 @@ export function map(el /* , config, data */) {
 	return placeholder(
 		el,
 		"map is not implemented",
-		"A geographic map needs a separate mapping library (Leaflet or similar). Out of Phase 1 scope.",
+		"Geographic maps are not available.",
 	);
 }

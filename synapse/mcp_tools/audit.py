@@ -1,23 +1,5 @@
 # Copyright (c) 2026, Dxbitz and contributors
-"""The Synapse Log, one row for every call, read or write, allowed or not.
-
-Every tool is wrapped in @audited. The wrapper owns four things the tools should
-not each reimplement:
-
-* **Shape.** A tool body returns a plain dict and the wrapper adds `success`, or
-  turns a raised Denied / exception into `{"success": False, "error": ...}`.
-  MCP tool failures come back as normal results carrying isError, so the model
-  reads the reason and corrects itself.
-* **The transaction.** A failed write is rolled back before anything else, so a
-  half-applied document never survives. A successful one is committed together
-  with its log row.
-* **The record.** Written with db_insert rather than a full insert(), no
-  validation, no hooks, no link checks. This runs on every call including
-  rejections, so it has to be cheap.
-* **Redaction.** Password-ish keys never reach the log.
-
-The tool body annotates its own row through `current()`.
-"""
+"""The Synapse Log, one row for every call, read or write, allowed or not."""
 
 import contextlib
 import functools
@@ -44,7 +26,11 @@ MAX_REASON_CHARS = 500
 
 _ENTRY_KEY = "_synapse_mcp_entry"
 
-# Matched against field names, case insensitive. A hit is replaced wholesale.
+
+class AuditError(RuntimeError):
+	"""The call could not be recorded and its transaction was rolled back."""
+
+
 _SECRET_RE = re.compile(r"password|passwd|pwd|secret|token|api_key|apikey|private_key", re.I)
 _REDACTED = "***"
 
@@ -77,14 +63,7 @@ class Entry:
 		self.row_count = int(count or 0)
 
 	def sql(self, query: str):
-		"""The SQL text. Gated by log_payloads like every other field value.
-
-		A query carries literal values in its WHERE clause, so it is a payload in
-		the same sense the write tools' values are. When a site turns payload
-		logging off it does so to keep data values out of the log, and the SQL
-		text has to obey that too, the row still records who ran SQL, when, the
-		status and the row count.
-		"""
+		"""The SQL text. Gated by log_payloads like every other field value."""
 		from synapse.mcp_tools import settings
 
 		try:
@@ -130,12 +109,6 @@ def audited(kind: str, tool: str | None = None):
 			except Denied as e:
 				return _fail(entry, "Rejected", str(e))
 			except frappe.PermissionError as e:
-				# Gate 4, Frappe itself refused. Reported like any other
-				# rejection so the model does not retry it as a transient error.
-				# Document.raise_no_permission_to raises an *empty*
-				# PermissionError and leaves the detail in flags.error_message,
-				# so without this fallback the caller is told only "Not
-				# permitted." and cannot tell which permission it lacked.
 				detail = str(e) or getattr(frappe.flags, "error_message", None)
 				return _fail(entry, "Rejected", _clean(detail) or "Not permitted.")
 			except Exception as e:
@@ -147,8 +120,6 @@ def audited(kind: str, tool: str | None = None):
 			finally:
 				_clear()
 
-		# Read by refused() so a call turned away before the body runs is still
-		# filed under the right kind.
 		wrapper._mcp_kind = kind
 		return wrapper
 
@@ -156,13 +127,7 @@ def audited(kind: str, tool: str | None = None):
 
 
 def refused(tool, reason: str, kind: str | None = None) -> None:
-	"""Log a call the server turned away before the tool body ran.
-
-	Unknown tool, a role the caller does not hold, arguments that do not fit the
-	schema. None of these touch data, which is exactly why they are worth
-	keeping: a token probing tools it has no rights to is the pattern an audit
-	trail exists to show.
-	"""
+	"""Log a call the server turned away before the tool body ran."""
 
 	entry = Entry(str(tool or "unknown")[:140], kind or OTHER)
 	entry.status = "Rejected"
@@ -171,8 +136,6 @@ def refused(tool, reason: str, kind: str | None = None) -> None:
 
 
 def _fail(entry: Entry, status: str, reason: str) -> dict:
-	# Order matters: drop any partial write first, then record what happened,
-	# then commit so the record survives.
 	with contextlib.suppress(Exception):
 		frappe.db.rollback()
 
@@ -184,7 +147,7 @@ def _fail(entry: Entry, status: str, reason: str) -> dict:
 
 
 def _write(entry: Entry):
-	"""Insert the row and commit. Never allowed to break the tool."""
+	"""Commit the tool's changes and log together, or roll both back."""
 
 	try:
 		doc = frappe.new_doc(LOG_DOCTYPE)
@@ -207,9 +170,11 @@ def _write(entry: Entry):
 			}
 		)
 		doc.db_insert()
-		frappe.db.commit()
+		frappe.db.commit()  # nosemgrep: tool changes and their audit record share this transaction
 	except Exception:
+		frappe.db.rollback()
 		_log_traceback("access log write")
+		raise AuditError("The audit record could not be saved. The call was rolled back.") from None
 
 
 def _clear():
@@ -278,7 +243,8 @@ def redact(value, secret_keys=frozenset()):
 
 
 def _is_secret(key, secret_keys) -> bool:
-	return bool(_SECRET_RE.search(str(key))) or str(key).lower() in secret_keys
+	key = str(key).lower()
+	return bool(_SECRET_RE.search(key)) or key in secret_keys or key.rsplit(".", 1)[-1] in secret_keys
 
 
 def _one_line(e: Exception) -> str:

@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: 18 September 2026
+Last updated: 25 September 2026
 
 Synapse is an open source app you install on your own Frappe or ERPNext site. It
 runs entirely on that site. Dxbitz does not host it, does not receive a copy of
@@ -19,7 +19,7 @@ processor of your data, because none of it reaches us.
 ## What Synapse stores on your site
 
 Synapse keeps an audit log (the Synapse Log doctype) so you can see what a
-connected AI client did. One row is written for every call, whether it
+connected client did. One row is written for every tool call, whether it
 succeeded, was refused, or errored. A row can hold:
 
 - the user who made the call
@@ -31,7 +31,7 @@ succeeded, was refused, or errored. A row can hold:
 - for a write, the values sent and the before and after of each changed field,
   when Log Field Values is on in Synapse Settings
 
-Fields of type Password are always masked in the log. If you do not want values
+Document Password fields are masked in logged inputs and changes. If you do not want values
 copied into the log at all, turn off Log Field Values in Synapse Settings. The
 row still records who did what and when, without the data itself.
 
@@ -42,17 +42,19 @@ the retention window you set in Synapse Settings, which is 90 days by default.
 
 - It does not send your data to Dxbitz.
 - It does not phone home, and it has no analytics or telemetry.
-- It has no external dependencies and makes no outbound calls of its own.
+- The built-in tools make no outbound calls of their own.
 
 ## Where your data can go
 
-Synapse is a bridge. When you connect an AI client, for example Claude or any
-other MCP client, that client reads and writes your site's data through Synapse,
+When you connect an MCP client, that client reads and writes your site's data through Synapse,
 as the user you signed in as, and within that user's permissions. The data the
 client reads then leaves your site to that client and its provider. What they do
 with it is covered by their own terms and privacy policy, not this one. Choose
-your client accordingly, and scope the connecting user to only what the agent
+your client accordingly, and scope the connecting user to only what the client
 should see.
+
+Custom tools and document controllers supplied by other installed apps may make
+outbound calls. Their behavior and privacy terms are outside this policy.
 
 OAuth tokens are issued and stored by Frappe itself, not by Synapse.
 

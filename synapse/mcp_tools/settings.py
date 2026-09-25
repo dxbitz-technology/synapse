@@ -1,12 +1,5 @@
 # Copyright (c) 2026, Dxbitz and contributors
-"""Builds the request's Policy from Synapse Settings and the caller's profiles.
-
-The Policy is user-scoped: a call's reach is the union of every enabled Synapse
-Profile whose roles the calling user holds. That is resolved here, once, and
-cached on frappe.local for the life of the request, a request is one user, so
-the cache is safe, and it saves rebuilding the union on every tool call in a
-multi-call request.
-"""
+"""Builds the request's Policy from Synapse Settings and the caller's profiles."""
 
 import frappe
 
@@ -17,7 +10,6 @@ SETTINGS_DOCTYPE = "Synapse Settings"
 PROFILE_DOCTYPE = "Synapse Profile"
 CACHE_KEY = "_synapse_policy"
 
-# The site can lower these in Synapse Settings but never raise them past here.
 HARD_ROW_CAP = 500
 DEFAULT_ROW_LIMIT = 100
 DEFAULT_RETENTION_DAYS = 90
@@ -46,8 +38,6 @@ def _build() -> Policy:
 	try:
 		doc = frappe.get_cached_doc(SETTINGS_DOCTYPE)
 	except Exception:
-		# Not migrated yet, or the DocType is gone. Deny everything rather than
-		# defaulting open.
 		return Policy()
 
 	denied = {}
@@ -61,10 +51,6 @@ def _build() -> Policy:
 
 	full_access, sql_access, grants, grant_names, custom_tools = _resolve_profiles()
 
-	# A System Manager may write the config, schema and permission DocTypes the
-	# read-only backstop protects, but only when the site has ticked Allow System
-	# Manager Config Writes. Both the switch and the role are required, and even
-	# then the token and credential backstop is never lifted (see policy.py).
 	config_writer = bool(doc.get("allow_config_writes")) and "System Manager" in set(
 		frappe.get_roles(frappe.session.user)
 	)
@@ -85,15 +71,7 @@ def _build() -> Policy:
 
 
 def _resolve_profiles() -> tuple:
-	"""Union the enabled profiles whose roles the current user holds.
-
-	Returns (full_access, sql_access, grants, grant_names, custom_tools).
-	`grants` maps a normalised DocType name to the set of actions granted across
-	those profiles; `grant_names` keeps a display spelling for each;
-	`custom_tools` is the set of custom tool names granted. Full Access
-	short-circuits the DocType grid, but SQL and custom tools are read before
-	that, so a Full Access profile can still list those extras explicitly.
-	"""
+	"""Union the enabled profiles whose roles the current user holds."""
 
 	roles = set(frappe.get_roles(frappe.session.user))
 
@@ -138,7 +116,6 @@ def _resolve_profiles() -> tuple:
 	return full_access, sql_access, frozen, grant_names, frozenset(custom_tools)
 
 
-# ── predicates used as `enabled=` on tool registrations ───────────────────────
 def read_tools_enabled() -> bool:
 	"""Read tools are visible when reads are on and the caller has some grant.
 
@@ -178,11 +155,6 @@ def sql_tool_enabled() -> bool:
 	if not (policy.enabled and policy.sql_enabled):
 		return False
 
-	# Fail closed where there is no read-only database user. Without it the SQL
-	# tool falls back to the site's read-write connection and the text guard is
-	# the only boundary, which is not safe by default on a hosted platform where
-	# a customer cannot create that user. Require an explicit site_config opt-in
-	# (mcp_sql_allow_guard_only) to run guard-only.
 	from synapse.mcp_tools import connection
 
 	if connection.is_configured():
@@ -190,7 +162,7 @@ def sql_tool_enabled() -> bool:
 	return bool(frappe.conf.get("mcp_sql_allow_guard_only"))
 
 
-def custom_tool_enabled(name: str) -> bool:
+def custom_tool_enabled(name: str, read_only: bool = False) -> bool:
 	"""Whether one custom tool is reachable for the caller.
 
 	Needs the endpoint on, the site's Enable Custom Tools switch on, and the tool
@@ -199,7 +171,12 @@ def custom_tool_enabled(name: str) -> bool:
 	"""
 
 	policy = get_policy()
-	return policy.enabled and policy.custom_enabled and name in policy.custom_tools
+	return (
+		policy.enabled
+		and policy.custom_enabled
+		and name in policy.custom_tools
+		and (policy.read_enabled if read_only else policy.write_enabled)
+	)
 
 
 def _has_any_grant(policy: Policy) -> bool:
@@ -213,7 +190,6 @@ def _has_write_grant(policy: Policy) -> bool:
 	return any(action != "read" for actions in policy.grants.values() for action in actions)
 
 
-# ── numeric and display settings ──────────────────────────────────────────────
 def row_limit(requested=None) -> int:
 	"""Clamp a caller's requested row count to the site's cap, then the hard cap."""
 

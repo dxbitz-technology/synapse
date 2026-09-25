@@ -76,3 +76,7 @@ jobs:
           bench --site test_site run-tests --app synapse
         env:
           TYPE: server
+
+      - name: Browser regressions
+        working-directory: /home/runner/frappe-bench
+        run: python apps/synapse/scripts/test_browser.py

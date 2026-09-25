@@ -1,8 +1,4 @@
 // Copyright (c) 2026, Dxbitz and contributors
-// Group B: widgets the desk shows but frappe-charts does not draw. These are our
-// own small renderers. Every colour, radius and spacing comes from theme CSS
-// variables (see synapse-library.css), so light and dark both work from one
-// definition and they sit beside a desk widget without looking foreign.
 
 import { clearEl, formatValue, placeholder, shell } from "./theme.js";
 
@@ -13,8 +9,6 @@ function elem(tag, className, text) {
 	return node;
 }
 
-// ── number_card ───────────────────────────────────────────────────────────────
-// One metric, optional delta and trend arrow.
 export function number_card(el, config, data) {
 	if (!data || data.value === undefined || data.value === null) {
 		return placeholder(el, "Number card has no value");
@@ -47,7 +41,6 @@ export function number_card(el, config, data) {
 	return card;
 }
 
-// ── table ─────────────────────────────────────────────────────────────────────
 const RIGHT_TYPES = new Set(["currency", "int", "float", "number", "percent"]);
 
 export function table(el, config, data) {
@@ -81,9 +74,6 @@ export function table(el, config, data) {
 	return t;
 }
 
-// ── list ──────────────────────────────────────────────────────────────────────
-// Compact labelled rows, top-N style: label, value, and an optional proportional
-// bar behind the row.
 export function list(el, config, data) {
 	if (!data || !Array.isArray(data.items)) {
 		return placeholder(el, "List data does not fit its template", "Expected { items: [{ label, value }] }");
@@ -111,7 +101,6 @@ export function list(el, config, data) {
 	return wrap;
 }
 
-// ── progress ──────────────────────────────────────────────────────────────────
 export function progress(el, config, data) {
 	if (!data || data.value === undefined || data.target === undefined) {
 		return placeholder(el, "Progress data does not fit its template", "Expected { value, target }");
@@ -143,9 +132,6 @@ export function progress(el, config, data) {
 	return wrap;
 }
 
-// ── pivot ─────────────────────────────────────────────────────────────────────
-// A rows x columns grid of one measure.
-// Shape: { rowLabels: [...], colLabels: [...], cells: [[...]], measureType?: "currency" }
 export function pivot(el, config, data) {
 	const ok = data && Array.isArray(data.rowLabels) && Array.isArray(data.colLabels) && Array.isArray(data.cells);
 	if (!ok) {
@@ -182,7 +168,6 @@ export function pivot(el, config, data) {
 	return t;
 }
 
-// ── callout ───────────────────────────────────────────────────────────────────
 const CALLOUT_LEVELS = new Set(["info", "success", "warning", "danger"]);
 
 export function callout(el, config, data) {
@@ -198,13 +183,16 @@ export function callout(el, config, data) {
 	return box;
 }
 
-// ── text_block ────────────────────────────────────────────────────────────────
 export function text_block(el, config, data) {
 	const md = (data && (data.markdown || data.text)) || "";
 	clearEl(el);
 	const box = elem("div", "synapse-text-block");
 	try {
-		box.innerHTML = window.frappe && frappe.markdown ? frappe.markdown(md) : escapeHtml(md);
+		if (window.frappe && frappe.markdown) {
+			box.appendChild(safeMarkdown(frappe.markdown(String(md))));
+		} else {
+			box.textContent = md;
+		}
 	} catch (e) {
 		box.textContent = md;
 	}
@@ -212,8 +200,36 @@ export function text_block(el, config, data) {
 	return box;
 }
 
-function escapeHtml(s) {
-	return String(s).replace(/[&<>"']/g, (c) => (
-		{ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
-	));
+function safeMarkdown(html) {
+	const template = document.createElement("template");
+	template.innerHTML = html;
+	const allowed = new Set(["P", "BR", "STRONG", "B", "EM", "I", "DEL", "S", "CODE", "PRE", "BLOCKQUOTE", "UL", "OL", "LI", "H1", "H2", "H3", "H4", "H5", "H6", "HR", "TABLE", "THEAD", "TBODY", "TR", "TH", "TD", "A"]);
+	const discard = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "SVG", "MATH", "FORM", "TEMPLATE"]);
+	function copy(source, target) {
+		for (const node of source.childNodes) {
+			if (node.nodeType === Node.TEXT_NODE) {
+				target.appendChild(document.createTextNode(node.textContent));
+			} else if (node.nodeType === Node.ELEMENT_NODE && !discard.has(node.tagName)) {
+				if (!allowed.has(node.tagName)) {
+					copy(node, target);
+					continue;
+				}
+				const clean = document.createElement(node.tagName.toLowerCase());
+				if (node.tagName === "A" && node.hasAttribute("href")) {
+					try {
+						const url = new URL(node.getAttribute("href"), document.baseURI);
+						if (["https:", "http:", "mailto:"].includes(url.protocol)) {
+							clean.setAttribute("href", url.href);
+							clean.setAttribute("rel", "noopener noreferrer");
+						}
+					} catch (_) { /* Ignore invalid links. */ }
+				}
+				copy(node, clean);
+				target.appendChild(clean);
+			}
+		}
+	}
+	const fragment = document.createDocumentFragment();
+	copy(template.content, fragment);
+	return fragment;
 }

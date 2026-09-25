@@ -1,16 +1,5 @@
 # Copyright (c) 2026, Dxbitz and contributors
-"""Synapse Profile, a named bundle of access granted to a set of roles.
-
-This is the primary grant. A user's reach through the Synapse endpoint is the
-union of every enabled profile whose roles they hold: the DocType Access grid of
-each, or unrestricted if Full Access is ticked. synapse.mcp_tools.settings reads
-the profiles matching the calling user and folds them into the request's Policy.
-
-Nothing here bypasses Frappe. A tick is a ceiling; the user still needs the
-matching Frappe permission on the record, which is checked when the document is
-actually touched. The site backstop in Synapse Settings, and the always-blocked
-and always-read-only sets in policy.py, override anything a profile grants.
-"""
+"""Synapse Profile, a named bundle of access granted to a set of roles."""
 
 import frappe
 from frappe import _
@@ -26,8 +15,6 @@ class SynapseProfile(Document):
 		self._warn_if_custom_tools_off()
 
 	def on_update(self):
-		# The Policy is built per request from the profiles matching the caller,
-		# and cached on frappe.local. Drop it so an edit takes effect at once.
 		from synapse.mcp_tools import settings
 
 		settings.clear_cache()

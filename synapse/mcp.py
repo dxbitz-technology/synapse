@@ -1,29 +1,12 @@
 # Copyright (c) 2026, Dxbitz and contributors
-"""The Synapse MCP endpoint.
-
-	POST https://<site>/api/method/synapse.mcp.handle_mcp
-
-Auth is Frappe's own: an OAuth bearer token, an API key or a desk session all
-work. An unauthenticated call gets a 401 with a WWW-Authenticate header pointing
-at the site's OAuth metadata, so a client can set itself up. No tool runs for a
-guest. After sign-in, each call goes through the profile gate, then Frappe's own
-permissions.
-
-The MCP server is vendored in synapse/mcp_core. See that module for why.
-"""
+"""The Synapse MCP endpoint."""
 
 import synapse
 from synapse.mcp_core import MCP
 
 
 def _record_refusal(tool_name, reason, tool):
-	"""Keep refused calls in the audit trail.
-
-	mcp_core turns a call away before the tool body runs when the tool is
-	unknown or switched off, when the caller lacks its role, or when the
-	arguments do not fit the schema. The tool's own @audited wrapper never gets
-	to run in those cases, so the row is written from here instead.
-	"""
+	"""Keep refused calls in the audit trail."""
 
 	from synapse.mcp_tools import audit
 
@@ -31,28 +14,23 @@ def _record_refusal(tool_name, reason, tool):
 	audit.refused(tool_name, reason, kind)
 
 
+def _external_tools():
+	from synapse.extend import load_external_tools
+
+	return load_external_tools()
+
+
 mcp = MCP(
 	"synapse",
 	version=getattr(synapse, "__version__", "1.0.0"),
 	on_refusal=_record_refusal,
+	external_tools=_external_tools,
 )
 
 
 @mcp.register()
 def handle_mcp():
-	"""Entry point for MCP requests. Body is imports only.
-
-	This runs before every JSON-RPC call, `ping` and `initialize` included, and
-	importing the tool modules is what fills the registry. Anything heavier than
-	an import here is paid on every single call.
-
-	The built-in tools are imported first, then custom tools contributed by other
-	apps are wired in. Built-ins are registered before that, so a custom tool can
-	never take a built-in tool's name.
-	"""
+	"""Entry point for MCP requests. Body is imports only."""
 
 	import synapse.mcp_tools.documents
 	import synapse.mcp_tools.sql
-	from synapse import extend
-
-	extend.load_external_tools()

@@ -1,10 +1,4 @@
-"""Tests for the vendored MCP core and value conversion.
-
-Pure stdlib, mcp_core.schema and mcp_tools.serialise import nothing from
-frappe. These cover the two things a vendored library has to keep working: the
-tool schemas a client is shown, and the argument checking that stands in front
-of every tool body.
-"""
+"""Tests for the vendored MCP core and value conversion."""
 
 import datetime
 import decimal
@@ -24,11 +18,10 @@ def sample(doctype: str, name: str, values: dict, limit: int = 100, filters: dic
 	"""Do a thing.
 
 	Args:
-		doctype: The DocType.
-		name: The document
-			name, wrapped over two lines.
-		values: Field values.
-	"""
+	        doctype: The DocType.
+	        name: The document
+	                name, wrapped over two lines.
+	        values: Field values."""
 
 
 class TestInputSchema(unittest.TestCase):
@@ -65,7 +58,6 @@ class TestToolRegistration(unittest.TestCase):
 	def test_docstring_descriptions_land_on_the_schema(self):
 		props = self.tool.as_listing()["inputSchema"]["properties"]
 		self.assertEqual(props["doctype"]["description"], "The DocType.")
-		# Undocumented parameters are listed, just without a description.
 		self.assertNotIn("description", props["limit"])
 
 	def test_listing_shape(self):

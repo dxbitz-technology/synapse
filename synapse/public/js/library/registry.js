@@ -1,16 +1,11 @@
 // Copyright (c) 2026, Dxbitz and contributors
-// The one registry that maps a component_type to its renderer. The page grid
-// (M1) and the catalog tool (M4) both read this, so there is a single source of
-// truth. An unknown key resolves to a labelled placeholder, never a crash.
 
 import * as charts from "./charts.js";
 import * as widgets from "./widgets.js";
 import * as layout from "./layout.js";
 import { placeholder } from "./theme.js";
 
-// component_type -> render(el, config, data)
 export const RENDERERS = {
-	// Group A: charts (adapters over frappe-charts)
 	bar_chart: charts.bar_chart,
 	bar_horizontal: charts.bar_horizontal, // not native in this build, placeholder
 	line_chart: charts.line_chart,
@@ -23,7 +18,6 @@ export const RENDERERS = {
 	heatmap: charts.heatmap,
 	map: charts.map, // deferred, placeholder
 
-	// Group B: widgets
 	number_card: widgets.number_card,
 	table: widgets.table,
 	list: widgets.list,
@@ -32,14 +26,11 @@ export const RENDERERS = {
 	callout: widgets.callout,
 	text_block: widgets.text_block,
 
-	// Group C: layout primitives
 	section_break: layout.section_break,
 	column_break: layout.column_break,
 	spacer: layout.spacer,
 };
 
-// Look up a renderer. Never returns undefined: an unknown key gives a renderer
-// that draws a labelled placeholder naming the missing type.
 export function resolve(componentType) {
 	const fn = RENDERERS[componentType];
 	if (fn) return fn;
@@ -48,9 +39,6 @@ export function resolve(componentType) {
 	};
 }
 
-// The one entry point callers use. Renders componentType into el from
-// (config, data), catching anything a renderer throws so one bad component can
-// never take down the page.
 export function render(el, componentType, config, data) {
 	const fn = resolve(componentType);
 	try {

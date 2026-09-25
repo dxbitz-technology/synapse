@@ -1,7 +1,4 @@
 // Copyright (c) 2026, Dxbitz and contributors
-// Group C: layout primitives. They carry no data. The page grid in M1 gives them
-// their real meaning; here each renders a small, theme-styled marker so the demo
-// harness can show them and the registry can resolve them.
 
 import { clearEl } from "./theme.js";
 

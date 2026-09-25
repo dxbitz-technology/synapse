@@ -31,8 +31,8 @@
   {"fieldname": "intro_html", "fieldtype": "HTML", "options": "<p class=\"text-muted small\">Tools are exposed at <code>/api/method/synapse.mcp.handle_mcp</code>. What a caller can reach is decided by the <b>Synapse Profile</b> records whose roles they hold, unioned together. Frappe permissions always apply on top, they are never bypassed. Raw SQL is the exception, and it ignores permissions entirely.</p>"},
 
   {"fieldname": "section_model", "fieldtype": "Section Break", "label": "Model"},
-  {"fieldname": "model_provider", "fieldtype": "Select", "label": "Model Provider", "options": "Claude\nOpenAI\nGemini", "default": "Claude", "description": "The model family this endpoint is presented for. Only Claude is wired up today; the rest are placeholders."},
-  {"fieldname": "model_html", "fieldtype": "HTML", "options": "<p class=\"text-muted small\">This setting does not change how tools run. It records which model family the site is presenting Synapse for. Support beyond Claude is not implemented yet.</p>"},
+  {"fieldname": "model_provider", "fieldtype": "Select", "label": "Model Provider", "options": "Claude\nOpenAI\nGemini", "default": "Claude", "description": "The model family this endpoint is presented for. A label only; it does not configure a provider."},
+  {"fieldname": "model_html", "fieldtype": "HTML", "options": "<p class=\"text-muted small\">This setting does not change how tools run. It records which model family the site is presenting Synapse for. Use a compatible MCP client to connect.</p>"},
 
   {"fieldname": "section_tools", "fieldtype": "Section Break", "label": "Tools"},
   {"fieldname": "enable_read_tools", "fieldtype": "Check", "label": "Enable Read Tools", "default": "1", "description": "get_doc, get_value, get_list, get_count, describe_doctype, list_available_doctypes"},

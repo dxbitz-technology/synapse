@@ -1,21 +1,5 @@
 # Copyright (c) 2026, Dxbitz and contributors
-"""Short-lived read-only database connection for the MCP SQL tool.
-
-The real security boundary. A separate MariaDB user holding nothing but SELECT
-cannot write, drop or read files no matter what gets past guard.py, because the
-database refuses it rather than a regex.
-
-Set up per site, credentials in site_config.json (never in the repo):
-
-	{
-	  "mcp_ro_db_user": "mcp_ro",
-	  "mcp_ro_db_password": "..."
-	}
-
-If those keys are absent the tool falls back to frappe.db.sql with a rollback,
-and guard.py becomes the only boundary. That is a materially weaker posture -
-see the SQL section of the app README.
-"""
+"""Short-lived read-only database connection for the MCP SQL tool."""
 
 import contextlib
 
@@ -43,8 +27,6 @@ def read_only_cursor(timeout_seconds: int):
 	import pymysql.cursors
 
 	if frappe.conf.get("db_type") not in (None, "mariadb"):
-		# Only MariaDB is wired up here. Postgres needs `SET LOCAL
-		# statement_timeout` and a psycopg connection; add it when a site needs it.
 		raise NotImplementedError("The read-only MCP connection supports MariaDB only.")
 
 	kwargs = {
@@ -52,7 +34,7 @@ def read_only_cursor(timeout_seconds: int):
 		"password": frappe.conf.get(CONFIG_PASSWORD_KEY),
 		"database": frappe.conf.get("db_name"),
 		"charset": "utf8mb4",
-		"cursorclass": pymysql.cursors.DictCursor,
+		"cursorclass": pymysql.cursors.SSDictCursor,
 		"connect_timeout": CONNECT_TIMEOUT,
 		"autocommit": True,
 	}
@@ -66,7 +48,6 @@ def read_only_cursor(timeout_seconds: int):
 	connection = pymysql.connect(**kwargs)
 	try:
 		with connection.cursor() as cursor:
-			# MariaDB takes seconds (as a double) on max_statement_time.
 			cursor.execute("SET SESSION max_statement_time = %s", (float(timeout_seconds),))
 			yield cursor
 	finally:

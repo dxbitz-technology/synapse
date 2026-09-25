@@ -1,14 +1,4 @@
-"""Rules test for the Synapse access model.
-
-Pure stdlib, policy.py imports nothing from frappe, so this runs under plain
-pytest as well as `bench run-tests --app synapse`. If a case here starts
-failing, a gate got looser, not the test.
-
-The model: access is the union of the caller's Synapse Profiles, resolved by
-settings.py into Policy.grants (a DocType → actions map) and Policy.full_access.
-The site backstop, Policy.denied plus the built-in ALWAYS_DENIED and
-ALWAYS_READ_ONLY sets, is subtractive and overrides any grant.
-"""
+"""Rules test for the Synapse access model."""
 
 import unittest
 
@@ -80,7 +70,6 @@ class TestGrants(unittest.TestCase):
 		self.assertIn("profile", str(ctx.exception).lower())
 
 	def test_action_not_granted_is_refused(self):
-		# Sales Invoice is read-only in the fixture.
 		self.assertEqual(check(policy(), READ, "Sales Invoice"), "Sales Invoice")
 
 		with self.assertRaises(Denied):
@@ -181,7 +170,6 @@ class TestBuiltInBackstop(unittest.TestCase):
 					check(p, action, name)
 
 	def test_control_plane_doctypes_are_blocked_outright(self):
-		# An agent must never edit the gate that governs it, even under full access.
 		p = full()
 		for name in (
 			"Synapse Settings",
@@ -215,7 +203,6 @@ class TestBuiltInBackstop(unittest.TestCase):
 						check(p, action, name)
 
 	def test_read_only_set_blocks_operate(self):
-		# operate is a write-class action, so it is blocked on read-only DocTypes.
 		with self.assertRaises(Denied):
 			check(full(), OPERATE, "Server Script")
 
@@ -255,7 +242,6 @@ class TestConfigWriterException(unittest.TestCase):
 			check(p, WRITE, "Workflow")
 
 	def test_exception_does_not_touch_business_doctypes(self):
-		# A business DocType is governed by grants, not the config exception.
 		p = full(config_writer=True)
 		self.assertEqual(check(p, WRITE, "Sales Invoice"), "Sales Invoice")
 

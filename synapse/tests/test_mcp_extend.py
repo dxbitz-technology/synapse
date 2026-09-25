@@ -7,31 +7,25 @@ touches frappe, and the loader is not exercised here.
 
 import unittest
 
-from synapse.extend import _REGISTRY, ExternalTool, tool
+from synapse.extend import ExternalTool, tool
 
 
 class TestToolDecorator(unittest.TestCase):
-	def setUp(self):
-		_REGISTRY.clear()
-
-	def tearDown(self):
-		_REGISTRY.clear()
-
 	def test_bare_decorator_uses_function_name(self):
 		@tool
 		def alpha(x: int) -> dict:
 			return {"x": x}
 
-		self.assertIn("alpha", _REGISTRY)
-		self.assertIsInstance(_REGISTRY["alpha"], ExternalTool)
-		self.assertFalse(_REGISTRY["alpha"].read_only)
+		self.assertEqual(alpha._synapse_tool.name, "alpha")
+		self.assertIsInstance(alpha._synapse_tool, ExternalTool)
+		self.assertFalse(alpha._synapse_tool.read_only)
 
 	def test_called_decorator_sets_metadata(self):
 		@tool(name="beta_tool", read_only=True, destructive=False, description="does beta")
 		def beta():
 			return {}
 
-		ext = _REGISTRY["beta_tool"]
+		ext = beta._synapse_tool
 		self.assertEqual(ext.name, "beta_tool")
 		self.assertTrue(ext.read_only)
 		self.assertEqual(ext.description, "does beta")
@@ -53,7 +47,7 @@ class TestToolDecorator(unittest.TestCase):
 		def two():
 			return {}
 
-		self.assertEqual({"one", "two"}, set(_REGISTRY))
+		self.assertEqual({"one", "two"}, {one._synapse_tool.name, two._synapse_tool.name})
 
 
 if __name__ == "__main__":

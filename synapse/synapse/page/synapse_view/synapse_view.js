@@ -1,7 +1,4 @@
 // Copyright (c) 2026, Dxbitz and contributors
-// Views one Synapse Page by name from the route /app/synapse-view/<name>. It
-// fetches the page's layout and hands it to the M0/M1 library to lay onto the
-// 12-column grid. It wires no data source; each block renders its frozen data.
 
 frappe.pages["synapse-view"].on_page_load = function (wrapper) {
 	const page = frappe.ui.make_app_page({
@@ -45,6 +42,10 @@ class SynapsePageView {
 				const model = r && r.message;
 				if (!model) {
 					this.page.main.html(placeholder("Page not found", name));
+					return;
+				}
+				if (!model.enabled) {
+					this.page.main.html(placeholder(__("This page is disabled.")));
 					return;
 				}
 				this.page.set_title(model.title || name);

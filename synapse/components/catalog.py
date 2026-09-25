@@ -1,28 +1,9 @@
 # Copyright (c) 2026, Dxbitz and contributors
-"""The component catalog: the single source of truth for every visual component.
-
-Each entry pins three things the rest of the system reads:
-
-* data_template, the JSON Schema the baked frozen_data must match. The
-  author-time validator (M2) and the LLM (M4) both use it.
-* options_schema, the JSON Schema for the config keys the component accepts.
-  Anything outside it is ignored, never passed through to the renderer.
-* description, written for an LLM to choose the component.
-
-The JS registry (synapse/public/js/library/registry.js) holds the matching
-renderers, keyed by the same `key`. seed() writes these into Synapse Component
-records; it is idempotent, so a migrate keeps the records in step with this file.
-
-Three keys are seeded as not_implemented, because this bench's frappe-charts
-(2.0.0-rc27) does not draw them and faking a look is not allowed:
-scatter_chart, bar_horizontal and map.
-"""
+"""The component catalog: the single source of truth for every visual component."""
 
 import json
 
 import frappe
-
-# ── shared schema fragments ───────────────────────────────────────────────────
 
 _AXIS_DATA = {
 	"type": "object",
@@ -126,10 +107,7 @@ _HEATMAP_OPTIONS = {
 _VALUE_TYPES = ["currency", "int", "float", "number", "percent"]
 
 
-# ── the catalog ───────────────────────────────────────────────────────────────
-
 COMPONENTS = [
-	# Group A: charts
 	{
 		"key": "bar_chart",
 		"label": "Bar Chart",
@@ -194,7 +172,6 @@ COMPONENTS = [
 		"data_template": _HEATMAP_DATA,
 		"options_schema": _HEATMAP_OPTIONS,
 	},
-	# Not native in this frappe-charts build. Flagged stubs.
 	{
 		"key": "scatter_chart",
 		"label": "Scatter Chart",
@@ -220,8 +197,8 @@ COMPONENTS = [
 		"label": "Map",
 		"group": "Chart",
 		"not_implemented": True,
-		"note": "A geographic map needs a separate mapping library (Leaflet or similar). Out of Phase 1 scope, decide the library before building.",
-		"description": "A geographic map. Not part of frappe-charts and not built in Phase 1.",
+		"note": "Geographic maps are not available.",
+		"description": "A geographic map. Not implemented.",
 		"data_template": _EMPTY_DATA,
 		"options_schema": {
 			"type": "object",
@@ -229,7 +206,6 @@ COMPONENTS = [
 			"properties": {"title": {"type": "string"}},
 		},
 	},
-	# Group B: widgets
 	{
 		"key": "number_card",
 		"label": "Number Card",
@@ -427,7 +403,6 @@ COMPONENTS = [
 		},
 		"options_schema": {"type": "object", "additionalProperties": False},
 	},
-	# Group C: layout primitives
 	{
 		"key": "section_break",
 		"label": "Section Break",
@@ -494,7 +469,3 @@ def seed():
 		else:
 			doc = frappe.get_doc({"doctype": "Synapse Component", "key": c["key"], **values})
 			doc.insert(ignore_permissions=True)
-
-	# Seeder run from a patch or bench, commit the seeded rows.
-	frappe.db.commit()  # nosemgrep
-	print(f"Seeded {len(COMPONENTS)} Synapse Component records on {frappe.local.site}.")

@@ -1,28 +1,5 @@
 # Copyright (c) 2026, Dxbitz and contributors
-"""Bulk editing for a Synapse Profile's DocType Access grid.
-
-A profile is the unit of access: it lists roles, and the DocTypes and actions
-those roles may reach. Small profiles are quicker to build in the desk, but a
-site that wants an agent to reach most of the schema should not have to tick
-hundreds of grid rows, so this fills one profile's grid in a single command:
-
-	bench --site <site> execute synapse.mcp_tools.profiles.show \\
-		--kwargs "{'profile': 'Reporting'}"
-	bench --site <site> execute synapse.mcp_tools.profiles.grant_all \\
-		--kwargs "{'profile': 'Reporting', 'actions': 'read'}"
-	bench --site <site> execute synapse.mcp_tools.profiles.grant \\
-		--kwargs "{'profile': 'Sales Agent', 'doctypes': 'Sales Invoice,Customer', 'actions': 'read,write,submit'}"
-	bench --site <site> execute synapse.mcp_tools.profiles.clear \\
-		--kwargs "{'profile': 'Reporting'}"
-
-For "reach everything, let Frappe permissions be the limit", tick Full Access on
-the profile instead, it says that in one box rather than 700 rows, and it stays
-correct as the schema grows. grant_all is for the middle ground: a broad but
-enumerated grid you can then trim.
-
-The two built-in protection sets in policy.py still apply to grant_all, so a
-credential DocType is never listed and a schema/code DocType is listed read only.
-"""
+"""Bulk editing for a Synapse Profile's DocType Access grid."""
 
 import frappe
 from frappe import _
@@ -31,8 +8,6 @@ from synapse.mcp_tools.policy import ACTIONS, ALWAYS_DENIED, ALWAYS_READ_ONLY
 
 PROFILE_DOCTYPE = "Synapse Profile"
 
-# The built-in sets live in policy.py, which enforces them as the backstop.
-# grant_all applies the same ones so a bulk fill gets the same protection.
 NEVER = ALWAYS_DENIED
 READ_ONLY_ALWAYS = ALWAYS_READ_ONLY
 
@@ -71,15 +46,11 @@ def show(profile=None):
 def grant_all(profile=None, actions="read", include_singles=1, dry_run=0):
 	"""List every DocType on the site in the profile, with the given actions.
 
-	Child tables are skipped, they are reached through their parent document.
-	Submit and cancel are only ticked where the DocType is actually submittable.
-
 	Args:
-		profile: The Synapse Profile to fill.
-		actions: Comma-separated, from read, write, submit, cancel, delete, operate.
-		include_singles: Include Single DocTypes (settings pages). Default yes.
-		dry_run: Report what would change and write nothing.
-	"""
+	        profile: The Synapse Profile to fill.
+	        actions: Comma-separated, from read, write, submit, cancel, delete, operate.
+	        include_singles: Include Single DocTypes (settings pages). Default yes.
+	        dry_run: Report what would change and write nothing."""
 
 	doc = _profile(profile)
 	wanted = _parse_actions(actions)
@@ -116,11 +87,10 @@ def grant(profile=None, doctypes=None, actions="read", dry_run=0):
 	"""List specific DocTypes in the profile, replacing any existing row for each.
 
 	Args:
-		profile: The Synapse Profile to fill.
-		doctypes: Comma-separated DocType names.
-		actions: Comma-separated, from read, write, submit, cancel, delete, operate.
-		dry_run: Report what would change and write nothing.
-	"""
+	        profile: The Synapse Profile to fill.
+	        doctypes: Comma-separated DocType names.
+	        actions: Comma-separated, from read, write, submit, cancel, delete, operate.
+	        dry_run: Report what would change and write nothing."""
 
 	doc = _profile(profile)
 	wanted = _parse_actions(actions)
@@ -166,7 +136,6 @@ def clear(profile=None, dry_run=0):
 
 	doc.set("doctype_access", [])
 	doc.save()
-	# Bench utility, commit the change it just made.
 	frappe.db.commit()  # nosemgrep
 	print(f"Removed {count} access row(s) from '{doc.name}'.")
 
@@ -192,7 +161,6 @@ def _apply(doc, rows, dry_run, label: str, merge: bool = False):
 			row.set(f"allow_{action}", 1 if action in granted else 0)
 
 	doc.save()
-	# Bench utility, commit the change it just made.
 	frappe.db.commit()  # nosemgrep
 
 	print(f"Profile '{doc.name}' now lists {len(doc.doctype_access)} DocType(s).")

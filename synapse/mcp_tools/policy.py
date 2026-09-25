@@ -1,20 +1,5 @@
 # Copyright (c) 2026, Dxbitz and contributors
-"""The Synapse access model: which DocTypes may be touched, and how.
-
-Pure stdlib, no frappe import, so every rule is unit testable without a site.
-settings.py builds a Policy from the caller's Synapse Profiles and the site's
-Synapse Settings and hands it here.
-
-Access is granted by Synapse Profile records: a user's reach is the union of the
-profiles their roles hold, precomputed into Policy.grants and Policy.full_access.
-
-A call passes three gates: the endpoint is authenticated, this module (the
-profile grants the action and the backstop does not take it back), then Frappe's
-own permissions. The backstop always wins: ALWAYS_DENIED (tokens, credentials
-and Synapse's own control plane) is never reachable, ALWAYS_READ_ONLY (schema,
-code and permission DocTypes) is read only, and Blocked DocTypes set on the site
-carve out anything else.
-"""
+"""The Synapse access model: which DocTypes may be touched, and how."""
 
 from dataclasses import dataclass, field
 
@@ -44,18 +29,8 @@ OPERATE = "operate"
 
 ACTIONS = (READ, WRITE, SUBMIT, CANCEL, DELETE, OPERATE)
 
-# Everything except a plain read is a write-class action: it needs the write
-# switch on, and it is what ALWAYS_READ_ONLY blocks. `operate` runs a
-# document's own method, which can change anything the method changes, so it
-# belongs here.
 WRITE_ACTIONS = (WRITE, SUBMIT, CANCEL, DELETE, OPERATE)
 
-# Never reachable, for any action, listed or not. Tokens, credentials and the
-# plumbing that hands them out, reading these is how a reader becomes a writer -
-# plus Synapse's own control plane, so an agent can never rewrite the gate that
-# governs it. guard.BLOCKED_TABLES is derived from this set (see guard.py) so the
-# raw SQL tool blocks the same tables and the two can never drift. Compared case
-# insensitively.
 ALWAYS_DENIED = frozenset(
 	{
 		"oauth bearer token",
@@ -69,8 +44,6 @@ ALWAYS_DENIED = frozenset(
 		"integration request",
 		"user social login",
 		"access log",
-		# Synapse's control plane. Blocking it here stops an agent whose user is
-		# a System Manager from editing the gate through the write tools.
 		"synapse settings",
 		"synapse profile",
 		"synapse profile role",
@@ -81,9 +54,6 @@ ALWAYS_DENIED = frozenset(
 	}
 )
 
-# Readable but never writable. Writing to these is not data entry, it is changing
-# the schema, the code or the permission model, and an agent that can edit
-# Custom DocPerm can grant itself anything.
 ALWAYS_READ_ONLY = frozenset(
 	{
 		"doctype",
@@ -103,7 +73,6 @@ ALWAYS_READ_ONLY = frozenset(
 		"system settings",
 		"workflow",
 		"scheduled job type",
-		# Synapse's own read-layer catalog. Agents may read it, never rewrite it.
 		"synapse component",
 	}
 )
@@ -119,14 +88,7 @@ class Denied(Exception):
 
 @dataclass(frozen=True)
 class Policy:
-	"""A snapshot of the caller's resolved access, in a form that needs no database.
-
-	`grants` and `full_access` are the union across the caller's enabled Synapse
-	Profiles; `denied` is the site backstop. Keys in `grants` and `denied` are
-	normalised (stripped, lower-cased); matching here is case insensitive
-	throughout, a grant that only matched exact capitalisation would be bypassed
-	by asking for 'salary slip'.
-	"""
+	"""A snapshot of the caller's resolved access, in a form that needs no database."""
 
 	enabled: bool = False
 	read_enabled: bool = False
@@ -158,11 +120,6 @@ class Policy:
 			blocked |= set(ACTIONS)
 
 		if wanted in ALWAYS_READ_ONLY:
-			# A System Manager may create and update these config, schema and
-			# permission DocTypes through MCP, because they can already do so in
-			# the desk. Only WRITE is lifted: delete, submit, cancel and operate
-			# stay blocked for everyone. ALWAYS_DENIED above is never lifted, so
-			# tokens and credentials stay blocked whatever role the caller holds.
 			if self.config_writer:
 				blocked |= set(WRITE_ACTIONS) - {WRITE}
 			else:
@@ -175,12 +132,11 @@ def check(policy: Policy, action: str, doctype: str) -> str:
 	"""Return the DocType name, or raise Denied naming the gate that closed.
 
 	Args:
-		policy: The caller's resolved access for this request.
-		action: One of ACTIONS.
-		doctype: The target DocType. Callers pass the name Frappe resolved, so
-			capitalisation is already canonical; matching here is still case
-			insensitive rather than trusting that.
-	"""
+	        policy: The caller's resolved access for this request.
+	        action: One of ACTIONS.
+	        doctype: The target DocType. Callers pass the name Frappe resolved, so
+	                capitalisation is already canonical; matching here is still case
+	                insensitive rather than trusting that."""
 
 	if action not in ACTIONS:
 		raise Denied(f"Unknown action '{action}'.")
@@ -197,7 +153,6 @@ def check(policy: Policy, action: str, doctype: str) -> str:
 	if not doctype or not isinstance(doctype, str):
 		raise Denied("A DocType is required.")
 
-	# Backstop first, it overrides any profile grant.
 	if action in policy.blocked_actions(doctype):
 		raise Denied(f"'{doctype}' is blocked for '{action}' by this site's Synapse backstop.")
 

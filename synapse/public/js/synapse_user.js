@@ -1,9 +1,4 @@
 // Copyright (c) 2026, Dxbitz and contributors
-// The user-facing Synapse shortcut. It rides on the User form, so a user reaches
-// it from their own profile ("My Settings"). It appears only on your own profile
-// and only if one of your roles is carried by a Synapse Profile, otherwise there
-// is nothing to connect to and the button stays hidden. All it offers is the MCP
-// link to copy and a short note on what it is.
 
 frappe.ui.form.on("User", {
 	refresh(frm) {

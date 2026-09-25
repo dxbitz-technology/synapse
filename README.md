@@ -1,357 +1,133 @@
-# Synapse: MCP server for Frappe and ERPNext
+# Synapse
 
-Synapse lets an AI client (Claude, or any other [MCP](https://modelcontextprotocol.io)
-client) read and write your Frappe or ERPNext site over OAuth. The client acts as
-a real user, stays inside that user's permissions, and every call is logged.
-
-```
-POST https://<your-site>/api/method/synapse.mcp.handle_mcp
-```
-
-## What makes it different
-
-Many Frappe MCP servers run with full privileges and give the model raw SQL or
-document access with permissions turned off. That is fine for a personal
-sandbox. It is not safe on a business system. Synapse works the other way.
-
-- It never turns off permissions. Every tool runs as the signed in user.
-  DocType permissions, User Permissions, share rules and submit or cancel rights
-  all apply. Writes go through the normal insert, save, submit and cancel path,
-  so validations, hooks and workflows run the same as they do in the desk.
-- It adds a second layer above permissions. "This user may edit Sales Invoices
-  in the desk" and "an AI agent holding this user's token may edit Sales
-  Invoices" are two different decisions. That second decision is the Synapse
-  Profile.
-- It logs every call, including ones that are refused.
-- It has no external dependencies and creates no roles. A plain
-  `bench install-app` is the whole install.
+An MCP server for Frappe 16 and ERPNext. Connect a compatible client to read and
+update records as a Frappe user, with a separate access profile and an audit log.
 
 ## Install
 
-```bash
-bench get-app https://github.com/dxbitz-technology/synapse
-bench --site <your-site> install-app synapse
+```sh
+bench get-app --branch version-16 https://github.com/dxbitz-technology/synapse
+bench --site <site> install-app synapse
 ```
 
-Check the current state of a site at any time:
+Requires Frappe 16. The optional SQL tool supports MariaDB only. ERPNext is not
+required. The component catalog is created during installation and refreshed
+on migration.
 
-```bash
-bench --site <your-site> execute synapse.mcp_tools.check.report
+## Connect
+
+1. In OAuth Settings, enable server metadata, protected-resource metadata and
+   dynamic client registration if your client uses automatic OAuth setup.
+2. Create a Synapse Profile. Add the user's roles and the DocTypes and actions
+   they may use.
+3. In Synapse Settings, enable the endpoint and read tools. Enable writes only
+   when needed.
+4. Connect your MCP client to:
+
+```text
+https://<site>/api/method/synapse.mcp.handle_mcp
 ```
 
-It prints what is set up and what is missing, in the order to fix it. A fresh
-install is fully closed. Nothing is reachable until you create a profile.
+OAuth uses Frappe's login. API keys and authenticated sessions are also supported.
+OAuth tokens authorize the user's wider Frappe API access, not just Synapse.
+Use a dedicated user with suitable permissions.
 
-## How access works
+Check setup from the Synapse console or run:
 
-Access is granted by **Synapse Profile** records. A profile lists a set of roles
-and the DocTypes and actions those roles may use. A user's access is the sum of
-every enabled profile whose roles they hold.
+```sh
+bench --site <site> execute synapse.mcp_tools.check.report
+```
 
-- With no matching profile, nothing is reachable.
-- A tick in a profile is a ceiling, not a grant. The user still needs the
-  matching Frappe permission on the record. That is checked when the document is
-  touched.
-- **Full Access** on a profile grants every action on every DocType and ignores
-  the grid. The user's own Frappe permissions become the working limit. Use it
-  only for a user whose Frappe permissions are already scoped the way you want.
-- **Allow SQL** on a profile turns on the raw SQL tool for its users. Read the
-  SQL section first.
+## Access
 
-Two fixed rules sit above every profile and cannot be overridden:
+Enabled profiles are combined across the user's roles. A profile never replaces
+Frappe permissions. No matching profile means no document access.
 
-- Some DocTypes are never reachable. These hold tokens, credentials and the
-  records that hand them out, plus Synapse's own settings, profiles and log.
-  Reading them is how a read-only user could turn into a writer, or edit the
-  gate that controls them.
-- Some DocTypes are read only and can never be written. These define the schema,
-  the code and the permission model, for example DocType, Custom Field, Server
-  Script, Custom DocPerm, Role and User. A user who could edit Custom DocPerm
-  could grant themselves anything.
+- Read, write, submit, cancel, delete and operate are separate grants.
+- Full Access grants document actions within the user's Frappe permissions.
+  SQL and custom tools still need their own explicit grants.
+- Credentials and Synapse's access settings are blocked.
+- Schema, code and permission records are read only by default. System Manager
+  config writes can be enabled separately for create/update only.
+- The site can block additional DocTypes in Synapse Settings.
 
-The read-only rule has one opt-in exception. Tick **Allow System Manager Config
-Writes** in Synapse Settings and a caller who holds the System Manager role can
-create and update those config, schema and permission DocTypes through MCP, since
-they can already do so in the desk. It is off by default. Only create and update
-are lifted; delete and run_operation on them stay blocked. The token and
-credential DocTypes above are never affected: they stay blocked for everyone,
-System Manager included.
+Document tools cover discovery, reads, counts, creation, updates, submission,
+cancellation, deletion and child-row editing. Child-row tools use row names and
+support expected-value checks. Batch row edits are saved together. Use whole-table
+updates only when deliberately replacing a table.
 
-Synapse Settings also has a site wide **Blocked DocTypes** list. Use it to block
-something that a profile would otherwise allow.
-
-## Tools
-
-| Tool | Action needed |
-|---|---|
-| `list_available_doctypes`, `describe_doctype` | read |
-| `get_doc`, `get_value`, `get_list`, `get_count` | read |
-| `create_doc`, `update_doc`, `set_value` | write |
-| `add_child`, `set_child_value`, `set_child_rows`, `delete_child` | write |
-| `replace_in_field` | write |
-| `submit_doc` | submit |
-| `cancel_doc` | cancel |
-| `delete_doc` | delete |
-| `run_operation` | operate |
-| `run_sql_query` | a profile with Allow SQL (see below) |
-
-The write tools fall into three bands, all under the `write` action:
-
-- **Document level:** `create_doc` makes a document, `update_doc` changes fields
-  on one (and replaces a whole child table if pointed at one), `set_value` sets a
-  single field.
-- **Row level:** `add_child` appends a row and returns its name and idx,
-  `set_child_value` edits one row (one or more fields, optional `expect`),
-  `set_child_rows` edits many rows atomically, `delete_child` removes a row. Rows
-  are addressed by `row.name`, taken from a prior `get_doc`, never by position or
-  content, so the log always names the row it touched. Each runs the parent's
-  real save, so totals and tax recompute the same as in the desk.
-- **Field text:** `replace_in_field` changes part of a long text field. It counts
-  how many times the text appears and refuses unless that count matches the number
-  you expected, so it cannot rewrite the wrong part.
-
-**For a child table, prefer the row-level tools.** Use `update_doc` on a table
-only to replace the whole thing on purpose. Reaching for `update_doc` to change
-one price would silently discard every other row.
-
-`set_child_value`, `set_child_rows` and `delete_child` take an optional `expect`
-of current values. When given, the write is refused if the row no longer holds
-those values, so an edit cannot land on a row that changed since it was read. A
-submitted parent is refused, the same as a desk edit would be. `run_operation`
-runs a document's own method (see below).
-
-Dates come back in the format set in Synapse Settings, ISO by default. Writes
-accept ISO or DD-MM-YYYY, so a read then write round trip cannot swap the day and
-the month.
-
-## The operate action
-
-`run_operation` runs a document's own method by name. This is the behaviour
-behind a desk button, for example a Sales Invoice reposting its accounting
-entries. Because it can run code, it has its own action, **operate**, which is
-granted per DocType in a profile. That grant is what makes it safe to offer. A
-profile has to say, for this DocType, that operations may run.
-
-It still runs as the signed in user, under Frappe permissions, and every call is
-logged. Methods that already have their own tool (save, submit, cancel, delete
-and so on) are refused here, and so is anything private. So operate cannot be
-used to get around the other tools.
+`run_operation` calls a controller's public business method. It requires the
+operate grant and document write permission. Framework methods, lifecycle hooks,
+credential access, queued actions and direct database mutators are excluded.
+Custom controller code remains responsible for its own effects and permissions.
 
 ## Custom tools
 
-Any installed app can add its own tools to the Synapse endpoint, so an app can
-expose the specific jobs it knows how to do rather than only the generic document
-tools. It is all done through one hook. The app declares each tool as data and
-needs no import of synapse:
+An installed app can declare a function through its hooks:
 
 ```python
-# in myapp/hooks.py
 synapse_tools = [
-    {"method": "myapp.synapse_tools.open_tasks_for", "read_only": True},
+    {"method": "myapp.tools.open_tasks", "read_only": True},
 ]
 ```
 
-```python
-# in myapp/synapse_tools.py
-import frappe
+The function's signature and docstring describe the tool. Alternatively, decorate
+functions with `@synapse.tool(read_only=True)` and list the module in the hook.
+Tool names must be unique and cannot replace built-ins.
 
-def open_tasks_for(project: str) -> dict:
-    """Return the open tasks on a project.
+Each tool needs Enable Custom Tools and an exact-name grant in a profile.
+Read-only tools also need Enable Read Tools; other tools need Enable Write Tools.
+Registrations are resolved for the current site and request. Tool authors must
+use permission-aware APIs and must not commit transactions themselves, otherwise
+Synapse cannot guarantee rollback with the audit record.
 
-    The description and arguments the model sees come from this docstring and
-    the function signature.
-    """
-    rows = frappe.get_list(
-        "Task",
-        filters={"project": project, "status": ["!=", "Completed"]},
-        fields=["name", "subject", "status"],
-    )
-    return {"project": project, "open_tasks": rows}
+## SQL
+
+SQL is off by default. It requires the site switch, a profile with Allow SQL,
+and a separately configured read-only MariaDB account. It bypasses Frappe record
+permissions, so grant it only to trusted database users.
+
+Set `mcp_ro_db_user` and `mcp_ro_db_password` in the site's configuration. The
+account should have SELECT access only to that site's database. Queries have a
+timeout and an enforced result limit. Joined output columns need unique names.
+
+Without that account the tool stays disabled. The explicit
+`mcp_sql_allow_guard_only` option permits the weaker fallback on the site's
+connection, protected by query checks and rollback. Optional
+`mcp_sql_blocked_tables` entries extend the fixed credential-table exclusions.
+
+## Audit and pages
+
+Synapse Log records tool calls, refusals and errors. Successful database changes
+and their audit record commit together. If the audit record cannot be saved,
+the call fails and its transaction is rolled back. External effects or commits
+inside third-party code cannot be undone by Synapse.
+
+Password fields are masked. Disable Log Field Values to omit submitted values,
+changes and SQL text. The retention period defaults to 90 days.
+See [PRIVACY.md](PRIVACY.md).
+
+Synapse Pages display saved charts, tables, metrics and formatted text on a
+responsive grid. Data is stored with each block; there are no live data sources.
+Open a page at `/app/synapse-view/<name>`. Page access is restricted to System
+Manager by default. Disabled pages cannot be viewed. Maps, scatter charts and
+horizontal bar charts are not available. Markdown supports formatting and safe
+links; embedded HTML controls and images are removed.
+
+The Model Provider field is a label only. It does not configure a provider.
+
+## Tests and support
+
+```sh
+python -m unittest discover -s apps/synapse/synapse -p 'test_mcp_*.py' -t apps/synapse
+bench --site <test-site> run-tests --app synapse
 ```
 
-An app that prefers to keep the flags next to the function can instead mark it
-with `@synapse.tool(read_only=True)` and list the module path as a plain string
-in the same hook (`synapse_tools = ["myapp.synapse_tools"]`). Both forms may be
-mixed.
+Run database tests on a disposable site. They create fixtures and exercise real
+commits and rollbacks.
 
-A custom tool runs the same way the built-in tools do. It runs as the signed in
-user, with Frappe permissions on, and every call is written to the Synapse Log.
-The app author is responsible for what the function does, so it should read and
-write through the normal Frappe document API and never with permissions off.
+Report issues at [GitHub Issues](https://github.com/dxbitz-technology/synapse/issues).
+For security reports, email info@dxbitz.com rather than posting details publicly.
 
-A registered tool is not reachable on its own. Two more things must be true:
-
-1. **Enable Custom Tools** is ticked in Synapse Settings.
-2. A Synapse Profile the caller holds lists the tool by its exact name, in the
-   Custom Tools table.
-
-This is the same explicit grant model as the rest of Synapse. Full Access does
-not include custom tools, because a custom tool can run any code its app wrote,
-so each one is granted by name. A tool whose name clashes with a built-in is
-refused at load, so an app can never replace a core tool. The readiness report
-lists every registered tool and whether a profile grants it:
-
-```bash
-bench --site <your-site> execute synapse.mcp_tools.check.report
-```
-
-## Model provider
-
-Synapse Settings has a **Model Provider** choice. Claude is the only provider
-that is wired up. The other options are placeholders. The setting records which
-model family the site presents Synapse for and does not change how tools run.
-
-## Setting it up
-
-**1. OAuth.** Frappe 16 can publish OAuth server metadata and support dynamic
-client registration. This is what lets an MCP client connect without someone
-creating an OAuth Client record by hand. It is off by default. In **OAuth
-Settings** turn on *Show Auth Server Metadata*, *Show Protected Resource
-Metadata* and *Enable Dynamic Client Registration*. Synapse does not change these
-settings. They affect the whole site's OAuth behaviour.
-
-A Frappe OAuth token is not limited to MCP. It authorises the whole `/api`
-surface as that user, so scope the user accordingly.
-
-**2. Create a Synapse Profile.** Add the roles the agent's user holds, then the
-DocTypes and actions those roles may use. Reading needs only a read tick.
-
-**3. Fill in Synapse Settings.** Tick *Enable Synapse Endpoint* and *Enable Read
-Tools*. Reads work at this point. For writes, also tick *Enable Write Tools*. If
-that switch is off, the endpoint stays read only whatever a profile grants.
-
-## Connect a client
-
-Once a profile is set up and the switches are on, point your MCP client at the
-endpoint.
-
-**Claude Code:**
-
-```bash
-claude mcp add --transport http mysite https://<your-site>/api/method/synapse.mcp.handle_mcp
-```
-
-Then run any prompt. The first time, a browser opens on your site login. Sign in
-as the user the agent should act as. That is the whole setup.
-
-**Claude Desktop:** Settings > Connectors > Add custom connector, and paste the
-same URL.
-
-Any MCP client that speaks Streamable HTTP with OAuth connects the same way.
-
-### See what it can do
-
-After connecting, paste this into your client to have it map its own access:
-
-```
-Using the "mysite" MCP server, call list_available_doctypes, then describe two
-or three of the DocTypes you can reach. Tell me in plain English what you can
-read, create, update, submit, delete or run for me on this site, and list
-anything you have a tool for but cannot use yet and why.
-```
-
-It calls the read tools and comes back with exactly what it can do for that
-user, which depends on their profile and their Frappe permissions. Swap
-`mysite` for whatever name you gave the server.
-
-### If the client cannot find the server
-
-The endpoint answers an unauthenticated call with a 401 and a WWW-Authenticate
-header pointing at the site OAuth metadata, so a client can set itself up. If it
-says it cannot determine the server settings, the three OAuth switches (see
-Setting it up) are off, so there is no metadata to read.
-
-## Raw SQL
-
-`run_sql_query` does not use Frappe's permission system. A user in a profile with
-Allow SQL can read every table on the site, whatever their DocType permissions
-are. Grant it only to users who already have full database access.
-
-It is off until *Enable Read-Only SQL Tool* is ticked in Synapse Settings and the
-user holds a profile with *Allow SQL*. It does not use the profile's DocType
-grants, because it never names a DocType. Prefer `get_list` and `get_doc`. Use
-SQL only for a join or an aggregate they cannot express. If an agent keeps
-reaching for SQL, the document tools are probably missing something it needs.
-
-Two layers protect it:
-
-1. A read only database user, enforced by MariaDB. A query that gets past the
-   text filter still cannot write.
-2. `mcp_tools/guard.py`. It checks the statement type, blocks comments, blocks
-   more than one statement, blocks a list of keywords and tables, and caps the
-   length. This is text matching, so treat it as a backup, not the main line of
-   defence.
-
-Set up the database user per site. As MariaDB root:
-
-```sql
-CREATE USER 'mcp_ro'@'localhost' IDENTIFIED BY '<STRONG_PASSWORD>';
-GRANT SELECT ON `<DB_NAME>`.* TO 'mcp_ro'@'localhost';
-REVOKE FILE ON *.* FROM 'mcp_ro'@'localhost';
-FLUSH PRIVILEGES;
-```
-
-Then in `site_config.json` (never in the repo):
-
-```json
-{
-  "mcp_ro_db_user": "mcp_ro",
-  "mcp_ro_db_password": "<STRONG_PASSWORD>"
-}
-```
-
-Without those keys the SQL tool stays off, even when the switch and a profile
-allow it. This is deliberate: with no read-only user the tool would fall back to
-the site's read-write connection with a rollback, and then the text guard is the
-only boundary, which is not safe by default. On a hosted platform where a second
-database user is not possible, accept that trade-off explicitly by setting
-`mcp_sql_allow_guard_only: true` in `site_config.json`. Only then does guard-only
-SQL run.
-
-Add more blocked tables per site with `mcp_sql_blocked_tables` in
-`site_config.json`. MariaDB only. `connection.py` raises `NotImplementedError` on
-other backends.
-
-## Audit
-
-Every call writes a **Synapse Log** row: success, refusal or error. Each row
-records the tool, the user, how they signed in, the IP address, the document
-touched, the row counts and the timing. Writes also record the values sent and
-the before and after of each changed field. Calls that are refused before the
-tool runs are logged too.
-
-If a tool looks blocked and there is no log row for it, the block is in the
-client, usually its own tool permission prompt. Check that first.
-
-Log rows are written with their own commit after any rollback, so a failed or
-refused write still leaves a record. System Manager can read and report on the
-log but cannot create or edit rows from the desk. A daily job drops rows past the
-retention window. Untick *Log Field Values* if the data itself must not be copied
-into the log. Password fields are masked either way.
-
-## Dashboards
-
-Alongside the MCP server, Synapse ships a component library and a small page
-builder for the desk. Lay out charts, tables, number cards, lists, progress bars
-and more on a responsive 12-column grid. The charts wrap Frappe's own
-frappe-charts, so they match the desk's look. A Synapse Page holds the layout,
-each block renders from the data baked into it, and you view it at
-`/app/synapse-view/<name>`. Every component renders purely from its config and
-data, with nothing fetched at view time.
-
-## Tests
-
-```bash
-bench --site <your-site> run-tests --app synapse
-```
-
-The access model, the SQL guard, the tool schemas and the value conversion do
-not import anything from frappe, so they also run without a site:
-
-```bash
-python -m unittest discover -s apps/synapse -p 'test_mcp_*.py'
-```
-
-## Licence
-
-GNU Affero General Public License v3.0 or later. See [LICENSE](LICENSE).
+Licensed under AGPL-3.0-or-later. The adapted MCP core includes its original
+[MIT notice](synapse/mcp_core/LICENSE).

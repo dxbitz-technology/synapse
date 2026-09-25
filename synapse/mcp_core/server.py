@@ -1,12 +1,5 @@
 # Copyright (c) 2026, Dxbitz and contributors
-"""JSON-RPC dispatch and the tool registry for the vendored MCP core.
-
-See synapse/mcp_core/__init__.py for why this is vendored. Adapted from
-frappe/frappe-mcp (MIT). It adds optional per-tool roles: a tool can list the
-roles allowed to call it, and is then hidden from tools/list and refused by
-tools/call for anyone else. Synapse gates in the tools instead, so it passes no
-roles here.
-"""
+"""JSON-RPC dispatch and the tool registry for the vendored MCP core."""
 
 import json
 from collections.abc import Callable
@@ -29,8 +22,6 @@ INVALID_REQUEST = -32600
 METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
 
-# Newest first. The client's requested version is echoed when we speak it,
-# otherwise it gets our newest and decides whether to continue.
 SUPPORTED_PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
 
 
@@ -73,40 +64,31 @@ class Tool:
 class MCP:
 	"""One MCP server. Create a single instance per app and register tools on it."""
 
-	def __init__(self, name: str, version: str = "1.0.0", on_refusal: Callable | None = None):
-		"""
-		Args:
-			name: Server name reported to clients at `initialize`.
-			version: Server version reported at `initialize`.
-			on_refusal: Called as (tool_name, reason, tool_or_None) when a call
-				is turned away before the tool body runs, unknown tool, missing
-				role, bad arguments. The app uses it to keep those attempts in
-				its audit trail; without it they would leave no trace, which is
-				the opposite of what an audit trail is for.
-		"""
+	def __init__(
+		self,
+		name: str,
+		version: str = "1.0.0",
+		on_refusal: Callable | None = None,
+		external_tools: Callable | None = None,
+	):
+		"""Args:
+		name: Server name reported to clients at `initialize`.
+		version: Server version reported at `initialize`.
+		on_refusal: Called as (tool_name, reason, tool_or_None) when a call
+		        is turned away before the tool body runs, unknown tool, missing
+		        role, bad arguments. The app uses it to keep those attempts in
+		        its audit trail; without it they would leave no trace, which is
+		        the opposite of what an audit trail is for."""
 
 		self._name = name
 		self._version = version
 		self._on_refusal = on_refusal
+		self._external_tools = external_tools
 		self._tools: dict[str, Tool] = {}
 		self._entry_fn: Callable | None = None
 
-	# ── registration ──────────────────────────────────────────────────────────
 	def register(self, *, allow_guest: bool = True):
-		"""Wrap a function as the whitelisted Frappe endpoint for this server.
-
-		allow_guest is True on purpose, and a guest still never reaches a tool.
-		An unauthenticated call is answered with a 401 and a WWW-Authenticate
-		header naming the site's OAuth protected-resource metadata. That 401 is
-		what lets an MCP client discover how to authenticate and begin the OAuth
-		flow. The framework's own 403 for a blocked guest carries no such pointer,
-		and a client shown a 403 gives up with "could not determine the server
-		settings", so the endpoint has to answer the challenge itself.
-
-		The decorated function runs before each request, which is where tool
-		modules get imported. Keep its body to imports, it runs on every JSON-RPC
-		call including `ping`.
-		"""
+		"""Wrap a function as the whitelisted Frappe endpoint for this server."""
 
 		import frappe
 		from werkzeug.wrappers import Response
@@ -140,19 +122,15 @@ class MCP:
 	):
 		"""Register a function as a tool.
 
-		The description and the per-argument descriptions come from a
-		Google-style docstring; the input schema comes from the signature.
-
 		Args:
-			name: Tool name. Defaults to the function name.
-			description: Overrides the docstring summary.
-			roles: Roles allowed to call it. Any one is enough. Empty means any
-				authenticated user, which for this app is almost never right.
-			annotations: Client hints, set readOnlyHint on read tools.
-			enabled: Optional predicate evaluated per request. Returning False
-				hides the tool, which is how site settings switch groups of
-				tools off without unregistering them.
-		"""
+		        name: Tool name. Defaults to the function name.
+		        description: Overrides the docstring summary.
+		        roles: Roles allowed to call it. Any one is enough. Empty means any
+		                authenticated user, which for this app is almost never right.
+		        annotations: Client hints, set readOnlyHint on read tools.
+		        enabled: Optional predicate evaluated per request. Returning False
+		                hides the tool, which is how site settings switch groups of
+		                tools off without unregistering them."""
 
 		def decorator(fn: Callable):
 			summary, arg_docs = split_docstring(fn.__doc__)
@@ -176,7 +154,6 @@ class MCP:
 
 		return decorator
 
-	# ── request handling ──────────────────────────────────────────────────────
 	def handle(self, request, response):
 		if request.method != "POST":
 			response.status_code = 405
@@ -188,7 +165,6 @@ class MCP:
 			return _error(response, None, PARSE_ERROR, "Parse error")
 
 		if not isinstance(data, dict):
-			# Batches were removed from MCP in 2025-06-18 and are not accepted.
 			return _error(response, None, INVALID_REQUEST, "Invalid Request")
 
 		method = data.get("method") or ""
@@ -233,7 +209,9 @@ class MCP:
 		name = params.get("name")
 		arguments = params.get("arguments") or {}
 
-		tool = self._tools.get(name)
+		if not isinstance(name, str):
+			return self._refuse(None, "Tool name must be a string.", None)
+		tool = self._request_tools().get(name)
 		if tool is None or not _is_enabled(tool):
 			return self._refuse(name, f"Tool '{name}' is not available.", tool)
 
@@ -251,10 +229,9 @@ class MCP:
 		try:
 			return _tool_result(tool.fn(**validated))
 		except Exception as e:
-			# The tools log and shape their own failures; this is the backstop
-			# for anything that escapes. One line, no traceback to the client.
 			_log_exception(name)
-			return _tool_error(f"{type(e).__name__}: {str(e).strip().splitlines()[0][:400]}")
+			message = str(e).strip().splitlines()
+			return _tool_error(f"{type(e).__name__}: {(message[0] if message else 'Tool failed')[:400]}")
 
 	def _refuse(self, name, reason: str, tool: Tool | None) -> dict:
 		"""Record the attempt, then hand the reason back to the caller."""
@@ -268,10 +245,17 @@ class MCP:
 		return _tool_error(reason)
 
 	def _visible_tools(self) -> list[Tool]:
-		return [t for t in self._tools.values() if _is_enabled(t) and _has_any_role(t.roles)]
+		return [t for t in self._request_tools().values() if _is_enabled(t) and _has_any_role(t.roles)]
+
+	def _request_tools(self) -> dict[str, Tool]:
+		tools = dict(self._tools)
+		if self._external_tools:
+			for name, tool in self._external_tools().items():
+				if name not in tools:
+					tools[name] = tool
+		return tools
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
 def _is_enabled(tool: Tool) -> bool:
 	if tool.enabled is None:
 		return True
@@ -308,7 +292,8 @@ def _log_exception(label: str):
 
 def _tool_result(value: Any) -> dict:
 	text = value if isinstance(value, str) else _dumps(value)
-	result: dict[str, Any] = {"content": [{"type": "text", "text": text}], "isError": False}
+	failed = isinstance(value, dict) and value.get("success") is False
+	result: dict[str, Any] = {"content": [{"type": "text", "text": text}], "isError": failed}
 
 	if isinstance(value, dict):
 		result["structuredContent"] = value
@@ -317,9 +302,6 @@ def _tool_result(value: Any) -> dict:
 
 
 def _tool_error(message: str) -> dict:
-	# An MCP tool failure is a successful JSON-RPC response carrying isError, so
-	# the model can read the reason and correct itself instead of the client
-	# treating it as a transport fault.
 	return {"content": [{"type": "text", "text": message}], "isError": True}
 
 
@@ -351,14 +333,7 @@ def _error(response, request_id, code, message):
 
 
 def _unauthenticated(Response):
-	"""A 401 that tells an MCP client where the OAuth metadata is.
-
-	The MCP authorization spec and RFC 9728 both say an unauthorised request to a
-	protected resource is answered with 401 and a WWW-Authenticate header that
-	names the protected-resource metadata. A client reads that header to find the
-	authorization server and begin the OAuth flow. This is the one response the
-	framework's guest 403 cannot give, so the endpoint gives it here.
-	"""
+	"""A 401 that tells an MCP client where the OAuth metadata is."""
 
 	try:
 		import frappe

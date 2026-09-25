@@ -1,7 +1,4 @@
 // Copyright (c) 2026, Dxbitz and contributors
-// The Synapse admin console. System Manager only (enforced by the Page roles).
-// A copiable endpoint link on top, and a sidebar of the actions an admin needs:
-// profiles, settings, logs and a readiness check.
 
 frappe.pages["synapse"].on_page_load = function (wrapper) {
 	const page = frappe.ui.make_app_page({

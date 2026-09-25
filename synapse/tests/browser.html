@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Synapse browser tests</title>
+<link rel="stylesheet" href="../public/css/synapse_library.css">
+<div id="text"></div><div id="layout"></div><pre id="results">pending</pre>
+<script src="../../../frappe/node_modules/showdown/dist/showdown.js"></script>
+<script>window.frappe={markdown: text => new showdown.Converter({tables:true}).makeHtml(text)};</script>
+<script type="module">
+import {text_block} from '../public/js/library/widgets.js';
+import {renderPage} from '../public/js/library/grid.js';
+const results = [];
+function check(name, condition) { results.push({name, passed: Boolean(condition)}); }
+window.executed = false;
+text_block(document.querySelector('#text'), {}, {markdown: '**Safe** <img src="data:image/png,invalid" onerror="window.executed=true"><svg onload="window.executed=true"></svg><iframe srcdoc="bad"></iframe><a href="javascript:window.executed=true" onclick="window.executed=true">Bad</a> [Good](https://example.com)'});
+const host = document.querySelector('#text');
+check('formatting survives', host.querySelector('strong')?.textContent === 'Safe');
+check('active elements removed', !host.querySelector('img,svg,iframe,script,style'));
+check('event handlers removed', !host.querySelector('[onclick],[onload],[onerror]'));
+check('unsafe links removed', !host.querySelector('a[href^="javascript:"]'));
+check('safe links preserved', Boolean(host.querySelector('a[href="https://example.com/"]')));
+renderPage(document.querySelector('#layout'), {blocks: [
+ {component_type:'number_card',columns:12,config:{},frozen_data:{value:1}},
+ {component_type:'column_break'},
+ {component_type:'number_card',columns:9,config:{},frozen_data:{value:2}},
+ {component_type:'spacer',columns:12,config:{height:12}}
+]});
+const grid=document.querySelector('.synapse-page-grid');
+const expected=innerWidth<=640?1:innerWidth<=991?6:12;
+check('grid has no implicit columns',getComputedStyle(grid).gridTemplateColumns.split(' ').length===expected);
+check('forced new row stays within grid',document.querySelector('.synapse-new-row').getBoundingClientRect().right<=grid.getBoundingClientRect().right+1);
+setTimeout(()=>{
+ check('no script execution',!window.executed);
+ document.querySelector('#results').textContent=JSON.stringify(results);
+ document.documentElement.dataset.complete='true';
+},100);
+</script>
