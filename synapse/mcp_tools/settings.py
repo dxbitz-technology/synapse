@@ -213,12 +213,6 @@ def output_formats() -> Formats:
 	return DMY if _value("date_format") == "DD-MM-YYYY" else ISO
 
 
-def model_provider() -> str:
-	"""The model family the site presents Synapse for. Showcase only, no behaviour."""
-
-	return _value("model_provider") or "Claude"
-
-
 def log_payloads() -> bool:
 	return bool(_value("log_payloads"))
 

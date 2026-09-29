@@ -49,6 +49,7 @@ class Tool:
 	roles: tuple[str, ...] = ()
 	annotations: ToolAnnotations | None = None
 	enabled: Callable[[], bool] | None = field(default=None)
+	oauth_scopes: tuple[str, ...] | None = None
 
 	def as_listing(self) -> dict:
 		listing = {
@@ -58,6 +59,8 @@ class Tool:
 		}
 		if self.annotations:
 			listing["annotations"] = self.annotations.as_dict()
+		if self.oauth_scopes is not None:
+			listing["securitySchemes"] = [{"type": "oauth2", "scopes": list(self.oauth_scopes)}]
 		return listing
 
 
@@ -70,6 +73,7 @@ class MCP:
 		version: str = "1.0.0",
 		on_refusal: Callable | None = None,
 		external_tools: Callable | None = None,
+		oauth_scopes: tuple[str, ...] | None = None,
 	):
 		"""Args:
 		name: Server name reported to clients at `initialize`.
@@ -84,6 +88,7 @@ class MCP:
 		self._version = version
 		self._on_refusal = on_refusal
 		self._external_tools = external_tools
+		self.oauth_scopes = oauth_scopes
 		self._tools: dict[str, Tool] = {}
 		self._entry_fn: Callable | None = None
 
@@ -148,6 +153,7 @@ class MCP:
 				roles=tuple(roles or ()),
 				annotations=annotations,
 				enabled=enabled,
+				oauth_scopes=self.oauth_scopes,
 			)
 			self._tools[tool.name] = tool
 			return fn

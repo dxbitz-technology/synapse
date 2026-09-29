@@ -24,7 +24,7 @@ function show_synapse_connect(endpoint) {
 	$(`
 		<div style="font-size:13px;line-height:1.6;">
 			<p class="text-muted" style="margin-bottom:12px;">
-				${__("Synapse lets an AI assistant read and write this ERP as you, under your own permissions. Add the link below to an MCP client (for example Claude), then sign in with your usual login when it asks.")}
+				${__("Connect a compatible MCP client using the link below, then sign in with your usual Frappe login. The same link and access settings apply whichever client or model you use.")}
 			</p>
 			<div style="font-weight:600;margin-bottom:6px;">${__("Your MCP link")}</div>
 			<div style="display:flex;gap:8px;align-items:center;">

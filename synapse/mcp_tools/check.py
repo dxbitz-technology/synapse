@@ -50,7 +50,6 @@ def report_text() -> str:
 	lines.append(
 		f"  [{'  on  ' if s.get('allow_config_writes') else ' off  '}] System Manager config writes (create/update on read-only backstop DocTypes)"
 	)
-	lines.append(f"         Model provider: {settings.model_provider()}")
 	lines.append(f"         Row limit: {settings.row_limit()}   Retention: {settings.retention_days()} days")
 	lines.append(
 		"         Row tools present: add_child, set_child_value, set_child_rows, delete_child (write)"

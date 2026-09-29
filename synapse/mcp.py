@@ -25,6 +25,7 @@ mcp = MCP(
 	version=getattr(synapse, "__version__", "1.0.0"),
 	on_refusal=_record_refusal,
 	external_tools=_external_tools,
+	oauth_scopes=(),
 )
 
 

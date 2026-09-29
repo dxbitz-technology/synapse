@@ -74,6 +74,14 @@ class TestToolRegistration(unittest.TestCase):
 		mcp.tool(name="renamed", description="Overridden.")(sample)
 		self.assertEqual(mcp._tools["renamed"].description, "Overridden.")
 
+	def test_oauth_scopes_are_advertised_without_changing_tool_schema(self):
+		server = MCP("protected", oauth_scopes=("all",))
+		server.tool()(sample)
+		listing = server._tools["sample"].as_listing()
+		self.assertEqual(listing["securitySchemes"], [{"type": "oauth2", "scopes": ["all"]}])
+		self.assertEqual(listing["inputSchema"], self.tool.as_listing()["inputSchema"])
+		self.assertNotIn("securitySchemes", self.tool.as_listing())
+
 
 class TestDocstring(unittest.TestCase):
 	def test_summary_stops_at_args(self):

@@ -96,7 +96,7 @@ def load_external_tools():
 	cached = getattr(frappe.local, "_synapse_external_tools", None)
 	if cached is not None:
 		return cached
-	server = MCP("synapse-custom")
+	server = MCP("synapse-custom", oauth_scopes=mcp.oauth_scopes)
 	for ext in registered_tools().values():
 		if ext.name in mcp._tools:
 			frappe.log_error(

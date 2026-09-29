@@ -9,7 +9,7 @@ from frappe.model.document import Document
 from werkzeug.test import EnvironBuilder
 from werkzeug.wrappers import Request, Response
 
-from synapse import api, extend
+from synapse import __version__, api, extend
 from synapse.components.catalog import catalog, seed
 from synapse.mcp import handle_mcp, mcp
 from synapse.mcp_tools import audit, documents, settings
@@ -287,7 +287,7 @@ class TestSynapseIntegration(unittest.TestCase):
 			).get_environ()
 		)
 		response = mcp.handle(request, Response())
-		self.assertEqual(response.json["result"]["serverInfo"]["version"], "16.0.1")
+		self.assertEqual(response.json["result"]["serverInfo"]["version"], __version__)
 
 	def test_custom_registrations_do_not_leak_between_requests(self):
 		hook = [
@@ -298,11 +298,60 @@ class TestSynapseIntegration(unittest.TestCase):
 			}
 		]
 		with patch.object(frappe, "get_hooks", return_value=hook):
-			self.assertIn("site_tool", extend.load_external_tools())
+			tool = extend.load_external_tools()["site_tool"]
+			self.assertEqual(tool.as_listing()["securitySchemes"], [{"type": "oauth2", "scopes": []}])
 		del frappe.local._synapse_external_tools
 		with patch.object(frappe, "get_hooks", return_value=[]):
 			self.assertNotIn("site_tool", extend.load_external_tools())
 		self.assertNotIn("site_tool", mcp._tools)
+
+	def test_clients_share_the_endpoint_tools_and_permissions(self):
+		name = self.create_record()
+		listings = []
+
+		def request(client, method, params=None):
+			incoming = Request(
+				EnvironBuilder(
+					method="POST",
+					path=api.ENDPOINT_PATH,
+					headers={"User-Agent": client, "Accept": "application/json, text/event-stream"},
+					json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}},
+				).get_environ()
+			)
+			with patch.object(frappe, "request", incoming, create=True):
+				return handle_mcp()
+
+		for client in ("Claude", "ChatGPT", "Other MCP client"):
+			with self.subTest(client=client):
+				initialized = request(
+					client,
+					"initialize",
+					{"protocolVersion": "2025-06-18", "clientInfo": {"name": client, "version": "1"}},
+				)
+				self.assertEqual(initialized.status_code, 200)
+				listing = request(client, "tools/list").json["result"]["tools"]
+				self.assertTrue(listing)
+				listings.append(listing)
+				for tool in listing:
+					self.assertEqual(tool["securitySchemes"], [{"type": "oauth2", "scopes": []}])
+				for tool, arguments in (
+					("get_doc", {"doctype": RECORD, "name": name}),
+					("update_doc", {"doctype": RECORD, "name": name, "values": {"title": "Shared value"}}),
+				):
+					result = request(client, "tools/call", {"name": tool, "arguments": arguments})
+					self.assertEqual(result.status_code, 200)
+					self.assertFalse(result.json["result"]["isError"])
+				denied = request(
+					client,
+					"tools/call",
+					{"name": "get_doc", "arguments": {"doctype": "User", "name": "Administrator"}},
+				)
+				self.assertTrue(denied.json["result"]["isError"])
+				frappe.set_user("Guest")
+				self.assertEqual(request(client, "tools/list").status_code, 401)
+				frappe.set_user(USER)
+		self.assertEqual(listings[0], listings[1])
+		self.assertEqual(listings[0], listings[2])
 
 	def test_custom_tool_collision_is_rejected(self):
 		declarations = [
