@@ -21,8 +21,13 @@ class TestDashboardContracts(unittest.TestCase):
 				if item["script_template"]:
 					doc = frappe._dict(name="example", enabled=1, script=item["script_template"])
 					doc.check_permission = lambda *_: None
+					get_doc = frappe.get_doc
+
+					def load_doc(doctype, *args, **kwargs):
+						return doc if doctype == "Synapse Script" else get_doc(doctype, *args, **kwargs)
+
 					with (
-						patch.object(frappe, "get_doc", return_value=doc),
+						patch.object(frappe, "get_doc", side_effect=load_doc),
 						patch("frappe.utils.safe_exec.is_safe_exec_enabled", return_value=True),
 					):
 						result = scripts.execute_script("example")
