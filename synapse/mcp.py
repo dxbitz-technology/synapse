@@ -34,4 +34,5 @@ def handle_mcp():
 	"""Entry point for MCP requests. Body is imports only."""
 
 	import synapse.mcp_tools.documents
+	import synapse.mcp_tools.scripts
 	import synapse.mcp_tools.sql

@@ -1,28 +1,38 @@
 # Copyright (c) 2026, Dxbitz and contributors
-"""Validate saved page blocks against the component catalog."""
+"""Validate pages with the same component contracts as previews and scripts."""
 
-import json
+import re
 
 import frappe
-from frappe import _
 from frappe.model.document import Document
-from jsonschema import Draft7Validator
 
-from synapse.components.catalog import catalog
+from synapse.components.contracts import json_object, validate_component
 
 FULL_WIDTH_ONLY = {"section_break", "spacer"}
 
 
 class SynapsePage(Document):
 	def validate(self):
-		components = {component["key"]: component for component in catalog()}
+		if not re.fullmatch(r"[a-z0-9]+(?:[-_][a-z0-9]+)*", self.page_name or ""):
+			frappe.throw(frappe._("Route Name must use lowercase letters, numbers, hyphens or underscores."))
 		for i, block in enumerate(self.blocks or [], start=1):
-			component = components.get(block.component_type)
-			if not component or component.get("not_implemented"):
-				frappe.throw(_("Block {0}: this component is not available.").format(i))
-			self._clamp_columns(block)
-			self._check_json(block, "config", i, component["options_schema"])
-			self._check_json(block, "frozen_data", i, component["data_template"])
+			try:
+				definition = validate_component(block.component_type, json_object(block.config))
+				self._clamp_columns(block)
+				if block.get("data_script"):
+					if definition.get("is_layout"):
+						frappe.throw(frappe._("Layout blocks cannot use a data script."))
+					json_object(block.script_parameters)
+					script = frappe.get_doc("Synapse Script", block.data_script)
+					script.check_permission("read")
+					if not script.enabled:
+						frappe.throw(frappe._("The data script is disabled."))
+				else:
+					validate_component(
+						block.component_type, json_object(block.config), json_object(block.frozen_data)
+					)
+			except frappe.ValidationError as error:
+				frappe.throw(frappe._("Block {0}: {1}").format(i, str(error)))
 
 	def _clamp_columns(self, block):
 		if block.component_type in FULL_WIDTH_ONLY:
@@ -33,16 +43,3 @@ class SynapsePage(Document):
 		except (TypeError, ValueError):
 			cols = 12
 		block.columns = max(1, min(cols, 12))
-
-	def _check_json(self, block, field, row, schema):
-		raw = block.get(field)
-		try:
-			value = json.loads(raw) if raw else {}
-		except Exception as e:
-			frappe.throw(_("Block {0}: {1} is not valid JSON ({2}).").format(row, field, str(e)))
-
-		errors = list(Draft7Validator(schema).iter_errors(value))
-		if errors:
-			error = errors[0]
-			path = ".".join(str(part) for part in error.path) or field
-			frappe.throw(_("Block {0}: invalid {1} at {2}.").format(row, field, path))

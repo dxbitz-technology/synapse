@@ -20,18 +20,85 @@
   "options_schema"
  ],
  "fields": [
-  {"fieldname": "key", "fieldtype": "Data", "label": "Key", "reqd": 1, "unique": 1, "in_list_view": 1, "description": "The component_type the registry resolves, for example bar_chart."},
-  {"fieldname": "label", "fieldtype": "Data", "label": "Label", "reqd": 1, "in_list_view": 1},
-  {"fieldname": "component_group", "fieldtype": "Select", "label": "Group", "options": "Chart\nWidget\nLayout", "in_list_view": 1, "in_standard_filter": 1},
-  {"fieldname": "column_break_head", "fieldtype": "Column Break"},
-  {"fieldname": "is_layout", "fieldtype": "Check", "label": "Is Layout", "default": "0", "in_list_view": 1, "description": "A layout primitive that carries no data."},
-  {"fieldname": "not_implemented", "fieldtype": "Check", "label": "Not Implemented", "default": "0", "in_list_view": 1, "description": "This component is not available yet."},
-  {"fieldname": "section_desc", "fieldtype": "Section Break", "label": "Description"},
-  {"fieldname": "description", "fieldtype": "Small Text", "label": "Description", "description": "Describes what the component shows and when to choose it."},
-  {"fieldname": "note", "fieldtype": "Small Text", "label": "Note"},
-  {"fieldname": "section_contracts", "fieldtype": "Section Break", "label": "Contracts"},
-  {"fieldname": "data_template", "fieldtype": "Code", "label": "Data Template (JSON Schema)", "options": "JSON", "description": "The shape the baked frozen_data must match. Checked when a page is saved."},
-  {"fieldname": "options_schema", "fieldtype": "Code", "label": "Options Schema (JSON Schema)", "options": "JSON", "description": "The config keys the component accepts. Unknown options are rejected when a page is saved."}
+  {
+   "fieldname": "key",
+   "fieldtype": "Data",
+   "label": "Key",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "description": "The component_type the registry resolves, for example bar_chart."
+  },
+  {
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "label": "Label",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "component_group",
+   "fieldtype": "Select",
+   "label": "Group",
+   "options": "Chart\nWidget\nLayout",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "is_layout",
+   "fieldtype": "Check",
+   "label": "Is Layout",
+   "default": "0",
+   "in_list_view": 1,
+   "description": "A layout primitive that carries no data."
+  },
+  {
+   "fieldname": "not_implemented",
+   "fieldtype": "Check",
+   "label": "Not Implemented",
+   "default": "0",
+   "in_list_view": 1,
+   "description": "This component is not available yet."
+  },
+  {
+   "fieldname": "section_desc",
+   "fieldtype": "Section Break",
+   "label": "Description"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description",
+   "description": "Describes what the component shows and when to choose it."
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "Note"
+  },
+  {
+   "fieldname": "section_contracts",
+   "fieldtype": "Section Break",
+   "label": "Contracts"
+  },
+  {
+   "fieldname": "data_template",
+   "fieldtype": "Code",
+   "label": "Data Template (JSON Schema)",
+   "options": "JSON",
+   "description": "The shape the baked frozen_data must match. Checked when a page is saved."
+  },
+  {
+   "fieldname": "options_schema",
+   "fieldtype": "Code",
+   "label": "Options Schema (JSON Schema)",
+   "options": "JSON",
+   "description": "The config keys the component accepts. Unknown options are rejected when a page is saved."
+  }
  ],
  "index_web_pages_for_search": 0,
  "links": [],
@@ -41,7 +108,22 @@
  "name": "Synapse Component",
  "owner": "Administrator",
  "permissions": [
-  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1, "print": 1, "email": 1, "share": 1, "report": 1, "export": 1}
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "print": 1,
+   "email": 1,
+   "share": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Desk User",
+   "read": 1
+  }
  ],
  "sort_field": "component_group",
  "sort_order": "ASC",

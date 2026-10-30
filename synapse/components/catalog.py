@@ -39,7 +39,7 @@ _PART_DATA = {
 	"additionalProperties": False,
 	"properties": {
 		"labels": {"type": "array", "items": {"type": "string"}},
-		"values": {"type": "array", "items": {"type": "number"}},
+		"values": {"type": "array", "items": {"type": "number", "minimum": 0}},
 	},
 }
 
@@ -48,7 +48,7 @@ _HEATMAP_DATA = {
 	"required": ["dataPoints"],
 	"additionalProperties": False,
 	"properties": {
-		"dataPoints": {"type": "object", "additionalProperties": {"type": "number"}},
+		"dataPoints": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0}},
 		"start": {"type": "string"},
 		"end": {"type": "string"},
 	},
@@ -136,7 +136,7 @@ COMPONENTS = [
 		"key": "mixed_chart",
 		"label": "Mixed Chart",
 		"group": "Chart",
-		"description": "Bars and lines on one axis. Set each series' chartType to bar or line. Use to show a total as bars with a rate or average as a line.",
+		"description": "Bars and lines on one axis. Set each series' chartType to bar or line. Use for series in the same units, for example billed versus collected amounts.",
 		"data_template": _AXIS_DATA,
 		"options_schema": _AXIS_OPTIONS,
 	},
@@ -176,9 +176,7 @@ COMPONENTS = [
 		"key": "scatter_chart",
 		"label": "Scatter Chart",
 		"group": "Chart",
-		"not_implemented": True,
-		"note": "frappe-charts 2.0.0-rc27 in this bench does not draw scatter. Deferred pending a decision (upgrade frappe-charts or accept a custom renderer).",
-		"description": "Points on an x and y axis (the dots element). Not available in this bench's frappe-charts.",
+		"description": "Points on numeric x and y axes. labels holds x coordinates and each series holds matching y values. Hover or focus a point for its values.",
 		"data_template": _AXIS_DATA,
 		"options_schema": _AXIS_OPTIONS,
 	},
@@ -186,9 +184,7 @@ COMPONENTS = [
 		"key": "bar_horizontal",
 		"label": "Horizontal Bar Chart",
 		"group": "Chart",
-		"not_implemented": True,
-		"note": "frappe-charts in this bench has no horizontal-bar option. For a top-N horizontal bar, use the list widget, which draws a proportional bar per row.",
-		"description": "Horizontal bars over categories. Not available in this bench's frappe-charts.",
+		"description": "Grouped horizontal bars over categories, with a shared scale, signed values and full category labels.",
 		"data_template": _AXIS_DATA,
 		"options_schema": _AXIS_OPTIONS,
 	},
@@ -196,15 +192,29 @@ COMPONENTS = [
 		"key": "map",
 		"label": "Map",
 		"group": "Chart",
-		"not_implemented": True,
-		"note": "Geographic maps are not available.",
-		"description": "A geographic map. Not implemented.",
-		"data_template": _EMPTY_DATA,
-		"options_schema": {
+		"description": "A local geographic point map using bundled Natural Earth land outlines. Points have label, latitude, longitude and optional non-negative value. The view fits the supplied locations.",
+		"data_template": {
 			"type": "object",
+			"required": ["points"],
 			"additionalProperties": False,
-			"properties": {"title": {"type": "string"}},
+			"properties": {
+				"points": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["label", "latitude", "longitude"],
+						"additionalProperties": False,
+						"properties": {
+							"label": {"type": "string"},
+							"latitude": {"type": "number", "minimum": -90, "maximum": 90},
+							"longitude": {"type": "number", "minimum": -180, "maximum": 180},
+							"value": {"type": "number", "minimum": 0},
+						},
+					},
+				}
+			},
 		},
+		"options_schema": _PART_OPTIONS,
 	},
 	{
 		"key": "number_card",
@@ -231,6 +241,7 @@ COMPONENTS = [
 				"currency": {"type": "string"},
 				"precision": {"type": "number"},
 				"delta_type": {"type": "string", "enum": _VALUE_TYPES},
+				"delta_precision": {"type": "integer", "minimum": 0, "maximum": 6},
 				"delta_is_percent": {"type": "boolean"},
 			},
 		},
@@ -268,6 +279,7 @@ COMPONENTS = [
 								],
 							},
 							"precision": {"type": "number"},
+							"doctype": {"type": "string"},
 						},
 					},
 				},
@@ -277,7 +289,13 @@ COMPONENTS = [
 		"options_schema": {
 			"type": "object",
 			"additionalProperties": False,
-			"properties": {"title": {"type": "string"}, "currency": {"type": "string"}},
+			"properties": {
+				"title": {"type": "string"},
+				"currency": {"type": "string"},
+				"page_size": {"type": "integer", "minimum": 1, "maximum": 100},
+				"searchable": {"type": "boolean"},
+				"sortable": {"type": "boolean"},
+			},
 		},
 	},
 	{
@@ -421,7 +439,7 @@ COMPONENTS = [
 		"label": "Column Break",
 		"group": "Layout",
 		"is_layout": True,
-		"description": "A break that moves following components into the next column of the grid. Carries no data.",
+		"description": "A break that starts the following component on a new grid row. Carries no data.",
 		"data_template": _EMPTY_DATA,
 		"options_schema": {"type": "object", "additionalProperties": False},
 	},

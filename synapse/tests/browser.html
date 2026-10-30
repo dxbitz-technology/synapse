@@ -2,11 +2,16 @@
 <meta charset="utf-8">
 <title>Synapse browser tests</title>
 <link rel="stylesheet" href="../public/css/synapse_library.css">
-<div id="text"></div><div id="layout"></div><pre id="results">pending</pre>
+<div id="live"></div><div id="view"></div><div id="text"></div><div id="layout"></div><pre id="results">pending</pre>
+<script src="../../../frappe/node_modules/jquery/dist/jquery.js"></script>
 <script src="../../../frappe/node_modules/showdown/dist/showdown.js"></script>
-<script>window.frappe={markdown: text => new showdown.Converter({tables:true}).makeHtml(text)};</script>
+<script>window.__ = text => text; window.frappe={pages:{"synapse-view":{},"synapse":{}}, markdown: text => new showdown.Converter({tables:true}).makeHtml(text), utils:{escape_html: text => String(text).replaceAll('<','&lt;').replaceAll('>','&gt;')}};</script>
+<script src="../synapse/page/synapse_view/synapse_view.js"></script>
+<script src="../synapse/page/synapse/synapse.js"></script>
 <script type="module">
-import {text_block} from '../public/js/library/widgets.js';
+import {text_block, table} from '../public/js/library/widgets.js';
+import {render, known_types} from '../public/js/library/registry.js';
+import {clearEl} from '../public/js/library/theme.js';
 import {renderPage} from '../public/js/library/grid.js';
 const results = [];
 function check(name, condition) { results.push({name, passed: Boolean(condition)}); }
@@ -28,6 +33,114 @@ const grid=document.querySelector('.synapse-page-grid');
 const expected=innerWidth<=640?1:innerWidth<=991?6:12;
 check('grid has no implicit columns',getComputedStyle(grid).gridTemplateColumns.split(' ').length===expected);
 check('forced new row stays within grid',document.querySelector('.synapse-new-row').getBoundingClientRect().right<=grid.getBoundingClientRect().right+1);
+renderPage(document.querySelector('#live'), {blocks:[
+ {component_type:'number_card',columns:6,config:{},frozen_data:{value:99},data_error:'Script failed'},
+ {component_type:'number_card',columns:6,config:{},frozen_data:{value:7}}
+]});
+check('failed live block shows an error', document.querySelector('#live').textContent.includes('Script failed'));
+check('failed live block hides stale data', !document.querySelector('#live').textContent.includes('99'));
+check('other live blocks still render', document.querySelector('#live').textContent.includes('7'));
+window.synapse = {library:{render_page:renderPage, render, clear:clearEl}};
+let refresh, calls=0;
+const view=document.querySelector('#view');
+const main={html(value){view.innerHTML=value;return this;},empty(){view.innerHTML='';return this;},append(value){view.append(value);return this;}};
+frappe.get_route=()=>['synapse-view','test-page'];
+frappe.ui={make_app_page:()=>({main,set_title(){},set_primary_action(label,handler){refresh=handler;}})};
+frappe.call=async()=>({message:{title:'Test',enabled:true,blocks:[{component_type:'number_card',frozen_data:{value:++calls}}]}});
+const wrapper={};
+frappe.pages['synapse-view'].on_page_load(wrapper);
+frappe.pages['synapse-view'].on_page_show(wrapper);
+await Promise.resolve();
+check('opening fetches data once', calls===1 && view.textContent.includes('1'));
+refresh();
+await Promise.resolve();
+check('manual refresh fetches current data', calls===2 && view.textContent.includes('2'));
+let replies=[];
+frappe.call=()=>new Promise(resolve=>replies.push(resolve));
+refresh(); refresh();
+replies[1]({message:{enabled:true,blocks:[{component_type:'number_card',frozen_data:{value:42}}]}});
+await Promise.resolve();
+replies[0]({message:{enabled:true,blocks:[{component_type:'number_card',frozen_data:{value:13}}]}});
+await Promise.resolve();
+check('late old response cannot replace latest data', view.textContent.includes('42') && !view.textContent.includes('13'));
+const flush = async () => { for (let i=0;i<8;i++) await Promise.resolve(); };
+const tableHost = document.createElement('div'); document.body.append(tableHost);
+table(tableHost, {page_size:10}, {columns:[{key:'name',label:'Name',type:'link',doctype:'ToDo'},{key:'value',label:'Value',type:'number'}],rows:Array.from({length:45},(_,i)=>({name:'Item '+i,value:45-i}))});
+check('table paginates rows', tableHost.querySelectorAll('tbody tr').length===10);
+tableHost.querySelectorAll('th button')[1].click();
+check('table sorts numbers numerically', tableHost.querySelector('tbody tr').textContent.includes('Item 44'));
+check('table generates encoded document links', tableHost.querySelector('tbody a').getAttribute('href')==='/app/todo/Item%2044');
+tableHost.querySelector('input').value='Item 42'; tableHost.querySelector('input').dispatchEvent(new Event('input'));
+check('table search filters rows', tableHost.querySelectorAll('tbody tr').length===1 && tableHost.querySelector('tbody').textContent.includes('Item 42'));
+tableHost.querySelector('input').value='missing'; tableHost.querySelector('input').dispatchEvent(new Event('input'));
+check('table shows empty search result', tableHost.textContent.includes('No matching records'));
+let blockReplies=[], active=0, maxActive=0;
+frappe.call=(method)=> {
+ if(method==='synapse.api.get_page_layout') return Promise.resolve({message:{name:'test-page', enabled:true, blocks:[{component_type:'number_card',frozen_data:{value:77}},...Array.from({length:4},(_,i)=>({name:'block-'+i,component_type:'number_card',pending:true,live:true}))]}});
+ active++; maxActive=Math.max(maxActive,active);
+ return new Promise(resolve=>blockReplies.push(result=>{active--;resolve(result);}));
+};
+refresh(); await flush();
+check('snapshots render before slow scripts', view.textContent.includes('77') && view.textContent.includes('Loading current data'));
+check('live block requests are bounded', blockReplies.length===3 && maxActive===3);
+blockReplies[0]({message:{component_type:'number_card',config:{},frozen_data:{value:12}}});
+blockReplies[1]({message:{data_error:'Denied'}});
+blockReplies[2]({message:{component_type:'number_card',config:{},frozen_data:{value:14}}});
+await flush();
+check('remaining block starts when a slot opens',blockReplies.length===4);
+blockReplies[3]({message:{component_type:'number_card',config:{},frozen_data:{value:15}}});
+await flush();
+check('failed script does not hide successful blocks',view.textContent.includes('12') && view.textContent.includes('14') && view.textContent.includes('15') && view.textContent.includes('Current data unavailable'));
+check('partial failure has an honest status',view.textContent.includes('Some components could not load'));
+refresh();await flush();
+frappe.pages['synapse-view'].on_page_hide(wrapper);
+const oldText=view.textContent;
+for(const reply of blockReplies.slice(4)) reply({message:{component_type:'number_card',frozen_data:{value:888}}});
+await flush();
+check('hidden page ignores late live blocks',view.textContent===oldText);
+const consoleHost=$('<div>').appendTo(document.body);
+frappe.ui.make_app_page=()=>({main:consoleHost,set_primary_action(){}});
+frappe.call=async method=>({message:method==='synapse.api.connect_context'?{is_admin:false,covered:false}:[{name:'sales',title:'Sales'},{name:'stock',title:'Stock'}]});
+const consoleWrapper={};
+frappe.pages.synapse.on_page_load(consoleWrapper);
+frappe.pages.synapse.on_page_show(consoleWrapper);
+await flush();
+check('shared dashboards appear in discovery',consoleHost.find('.synapse-dashboard-card').length===2);
+check('reader does not see administration actions',consoleHost.find('button').length===0);
+consoleHost.find('input').val('stock').trigger('input');
+check('dashboard discovery search works',consoleHost.find('.synapse-dashboard-card').length===1 && consoleHost.text().includes('Stock'));
+frappe.call=()=>Promise.reject(new Error('offline'));
+frappe.pages.synapse.on_page_show(consoleWrapper);await flush();
+check('console failure replaces loading state',consoleHost.text().includes('Could not load dashboards') && !consoleHost.text().includes('Loading dashboards'));
+check('renderer count matches catalog',known_types().length===21);
+frappe.provide=path=>{let root=window;for(const part of path.split('.')) root=root[part] || (root[part]={});};
+let lastDialog;
+frappe.ui.Dialog=class {
+ constructor(options){this.options=options;this.values={};this.fields_dict={};for(const field of options.fields){this.fields_dict[field.fieldname]={df:field,$wrapper:$('<div>')};if(field.default!==undefined)this.values[field.fieldname]=field.default;}lastDialog=this;}
+ get_value(key){return this.values[key];}
+ get_values(){return {...this.values};}
+ set_value(key,value){this.values[key]=value;this.fields_dict[key]?.df.onchange?.();return Promise.resolve();}
+ set_values(values){return Promise.all(Object.entries(values).filter(([key])=>this.fields_dict[key]).map(([key,value])=>this.set_value(key,value)));}
+ set_df_property(key,property,value){this.fields_dict[key].df[property]=value;}
+ show(){}
+ hide(){this.onhide?.();}
+};
+const editorCatalog=[{key:'number_card',label:'Number Card',description:'One value',example_config:{},example_data:{value:10},options_schema:{},data_template:{},script_template:'result = {"value": 10}'},{key:'section_break',label:'Section',description:'Section',is_layout:true,example_config:{},example_data:{},options_schema:{},data_template:{}}];
+frappe.call=async()=>({message:editorCatalog});
+await import('../public/js/dashboard_editor.js');
+const editedRow={component_type:'number_card',columns:6,config:'{"title":"Existing"}',data_script:'saved-script',script_parameters:'{"status":"Open"}',frozen_data:'{"value":1}'};
+let dirty=0;
+await synapse.dashboard.component_dialog({dirty(){dirty++;},refresh_field(){}},editedRow);
+check('component editor preserves existing script parameters',lastDialog.get_value('source')==='Data Script' && lastDialog.get_value('script_parameters')==='{"status":"Open"}' && lastDialog.get_value('config')==='{"title":"Existing"}');
+let validatedPayload;
+frappe.call=async(method,payload)=>{validatedPayload=payload;return {message:{validated:true}};};
+await lastDialog.options.primary_action();
+check('applying scripted block validates without executing it',validatedPayload.validate_only===1 && validatedPayload.data_script==='saved-script' && dirty===1);
+await synapse.dashboard.component_dialog(null,editedRow,{preview_only:true});
+await lastDialog.set_value('component_type','section_break');
+check('switching to layout resets incompatible data',lastDialog.get_value('frozen_data')==='{}' && lastDialog.get_value('source')==='Saved Snapshot' && lastDialog.fields_dict.source.df.hidden===true);
+check('script test dialog cannot apply page edits',lastDialog.options.primary_action_label==='Close');
+await lastDialog.options.primary_action();
 setTimeout(()=>{
  check('no script execution',!window.executed);
  document.querySelector('#results').textContent=JSON.stringify(results);

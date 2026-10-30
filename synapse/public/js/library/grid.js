@@ -1,7 +1,7 @@
 // Copyright (c) 2026, Dxbitz and contributors
 
 import { render } from "./registry.js";
-import { clearEl } from "./theme.js";
+import { clearEl, placeholder } from "./theme.js";
 
 const SECTION_BREAK = "section_break";
 const COLUMN_BREAK = "column_break";
@@ -32,6 +32,15 @@ export function renderPage(container, page) {
 	container.appendChild(root);
 
 	const blocks = (page && page.blocks) || [];
+	if (!blocks.length) {
+		const empty = document.createElement("div");
+		empty.className = "synapse-page-empty";
+		empty.textContent =
+			typeof __ === "function"
+				? __("This dashboard has no components yet.")
+				: "This dashboard has no components yet.";
+		root.append(empty);
+	}
 	let grid = startSection(root, null);
 	let forceNewRow = false;
 
@@ -56,8 +65,16 @@ export function renderPage(container, page) {
 
 		const span = clampSpan(block.columns);
 		const cell = placeCell(grid, span, forceNewRow);
+		cell.dataset.componentType = type;
+		if (block.name) cell.dataset.blockName = block.name;
 		forceNewRow = false;
-		render(cellBody(cell), type, asObject(block.config), asObject(block.frozen_data));
+		if (block.pending) {
+			placeholder(cellBody(cell), "Loading current data...");
+		} else if (block.data_error) {
+			placeholder(cellBody(cell), "Current data unavailable", block.data_error);
+		} else {
+			render(cellBody(cell), type, asObject(block.config), asObject(block.frozen_data));
+		}
 	});
 
 	return root;

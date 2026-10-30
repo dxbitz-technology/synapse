@@ -74,6 +74,7 @@ ALWAYS_READ_ONLY = frozenset(
 		"workflow",
 		"scheduled job type",
 		"synapse component",
+		"synapse script",
 	}
 )
 

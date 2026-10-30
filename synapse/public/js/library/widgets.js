@@ -30,10 +30,20 @@ export function number_card(el, config, data) {
 		const row = elem("div", `synapse-number-delta trend-${trend}`);
 		const arrow = trend === "up" ? "↑" : trend === "down" ? "↓" : "→";
 		row.appendChild(elem("span", "synapse-delta-arrow", arrow));
-		const deltaText = formatValue(Math.abs(data.delta), config.delta_type || "number", {
-			precision: config.precision,
-		});
-		row.appendChild(elem("span", "synapse-delta-value", config.delta_is_percent === false ? deltaText : deltaText + "%"));
+		const deltaText = formatValue(
+			Math.abs(data.delta),
+			config.delta_is_percent === false ? config.delta_type || "number" : "number",
+			{
+				precision: config.delta_precision ?? 1,
+			}
+		);
+		row.appendChild(
+			elem(
+				"span",
+				"synapse-delta-value",
+				config.delta_is_percent === false ? deltaText : deltaText + "%"
+			)
+		);
 		card.appendChild(row);
 	}
 
@@ -45,40 +55,165 @@ const RIGHT_TYPES = new Set(["currency", "int", "float", "number", "percent"]);
 
 export function table(el, config, data) {
 	if (!data || !Array.isArray(data.columns) || !Array.isArray(data.rows)) {
-		return placeholder(el, "Table data does not fit its template", "Expected { columns: [...], rows: [...] }");
+		return placeholder(
+			el,
+			"Table data does not fit its template",
+			"Expected { columns: [...], rows: [...] }"
+		);
 	}
 	const body = shell(el, config.title);
+	if (!data.rows.length) {
+		body.append(elem("div", "synapse-empty", "No records for this period"));
+		return body;
+	}
+	let query = "",
+		page = 0,
+		sortKey = null,
+		direction = 1;
+	const size = Math.max(1, Math.min(100, Math.floor(Number(config.page_size) || 20)));
+	const controls = elem("div", "synapse-table-controls");
+	if (config.searchable !== false) {
+		const search = elem("input", "form-control input-sm");
+		search.type = "search";
+		search.placeholder = "Search table";
+		search.setAttribute("aria-label", config.title ? `Search ${config.title}` : "Search table");
+		search.oninput = () => {
+			query = search.value.toLocaleLowerCase();
+			page = 0;
+			draw();
+		};
+		controls.append(search);
+	}
+	body.append(controls);
 	const t = elem("table", "synapse-table");
-
-	const thead = elem("thead");
-	const htr = elem("tr");
-	data.columns.forEach((c) => {
-		const th = elem("th", RIGHT_TYPES.has(c.type) ? "text-right" : null, c.label || c.key);
-		htr.appendChild(th);
+	const head = elem("thead");
+	const headers = elem("tr");
+	const headingCells = [];
+	data.columns.forEach((column) => {
+		const th = elem("th", RIGHT_TYPES.has(column.type) ? "text-right" : null);
+		if (config.sortable !== false) {
+			const button = elem("button", "synapse-table-sort", column.label || column.key);
+			button.type = "button";
+			button.onclick = () => {
+				direction = sortKey === column.key ? -direction : 1;
+				sortKey = column.key;
+				page = 0;
+				draw();
+			};
+			th.append(button);
+		} else th.textContent = column.label || column.key;
+		headers.append(th);
+		headingCells.push([column, th]);
 	});
-	thead.appendChild(htr);
-	t.appendChild(thead);
-
+	head.append(headers);
 	const tbody = elem("tbody");
-	data.rows.forEach((row) => {
-		const tr = elem("tr");
-		data.columns.forEach((c) => {
-			const td = elem("td", RIGHT_TYPES.has(c.type) ? "text-right" : null);
-			td.textContent = formatValue(row[c.key], c.type, { currency: config.currency, precision: c.precision });
-			tr.appendChild(td);
-		});
-		tbody.appendChild(tr);
-	});
-	t.appendChild(tbody);
-	body.appendChild(t);
+	t.append(head, tbody);
+	const scroll = elem("div", "synapse-table-scroll");
+	scroll.tabIndex = 0;
+	scroll.setAttribute("role", "region");
+	scroll.setAttribute("aria-label", config.title || "Data table");
+	scroll.append(t);
+	body.append(scroll);
+	if (data.columns.length > 3) {
+		body.append(elem("div", "synapse-table-hint", "Scroll to see all columns"));
+	}
+	const footer = elem("div", "synapse-table-controls");
+	const previous = elem("button", "btn btn-default btn-xs", "Previous");
+	const next = elem("button", "btn btn-default btn-xs", "Next");
+	previous.type = next.type = "button";
+	const count = elem("span", "text-muted");
+	count.setAttribute("role", "status");
+	previous.onclick = () => {
+		page--;
+		draw();
+	};
+	next.onclick = () => {
+		page++;
+		draw();
+	};
+	footer.append(previous, count, next);
+	body.append(footer);
+	function draw() {
+		let rows = data.rows.filter(
+			(row) =>
+				!query ||
+				data.columns.some((column) =>
+					String(row[column.key] ?? "")
+						.toLocaleLowerCase()
+						.includes(query)
+				)
+		);
+		if (sortKey)
+			rows = rows.slice().sort((a, b) => {
+				const x = a[sortKey],
+					y = b[sortKey];
+				if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1;
+				return (
+					direction *
+					(typeof x === "number" && typeof y === "number"
+						? x - y
+						: String(x).localeCompare(String(y), undefined, { numeric: true }))
+				);
+			});
+		const pages = Math.max(1, Math.ceil(rows.length / size));
+		page = Math.max(0, Math.min(page, pages - 1));
+		tbody.replaceChildren();
+		for (const row of rows.slice(page * size, (page + 1) * size)) {
+			const tr = elem("tr");
+			for (const column of data.columns) {
+				const td = elem("td", RIGHT_TYPES.has(column.type) ? "text-right" : null);
+				const value = formatValue(row[column.key], column.type, {
+					currency: config.currency,
+					precision: column.precision,
+				});
+				if (column.type === "link" && column.doctype && value) {
+					const link = elem("a", null, value);
+					link.href = `/app/${encodeURIComponent(
+						column.doctype.toLowerCase().replaceAll(" ", "-")
+					)}/${encodeURIComponent(String(row[column.key]))}`;
+					td.append(link);
+				} else td.textContent = value;
+				tr.append(td);
+			}
+			tbody.append(tr);
+		}
+		if (!rows.length) {
+			const td = elem("td", "text-muted", "No matching records");
+			td.colSpan = Math.max(1, data.columns.length);
+			const tr = elem("tr");
+			tr.append(td);
+			tbody.append(tr);
+		}
+		for (const [column, th] of headingCells) {
+			if (column.key === sortKey)
+				th.setAttribute("aria-sort", direction === 1 ? "ascending" : "descending");
+			else th.removeAttribute("aria-sort");
+		}
+		previous.disabled = page === 0;
+		next.disabled = page >= pages - 1;
+		count.textContent = `${rows.length ? page * size + 1 : 0}–${Math.min(
+			(page + 1) * size,
+			rows.length
+		)} / ${rows.length}`;
+	}
+	draw();
 	return t;
 }
 
 export function list(el, config, data) {
 	if (!data || !Array.isArray(data.items)) {
-		return placeholder(el, "List data does not fit its template", "Expected { items: [{ label, value }] }");
+		return placeholder(
+			el,
+			"List data does not fit its template",
+			"Expected { items: [{ label, value }] }"
+		);
 	}
 	const body = shell(el, config.title);
+	if (!data.items.length) {
+		const note = elem("div", "synapse-empty", "No records for this period");
+		body.append(note);
+		return note;
+	}
 	const wrap = elem("div", "synapse-list");
 
 	data.items.forEach((item) => {
@@ -88,12 +223,18 @@ export function list(el, config, data) {
 			fill.style.width = Math.max(0, Math.min(1, item.bar)) * 100 + "%";
 			rowEl.appendChild(fill);
 		}
-		rowEl.appendChild(elem("span", "synapse-list-label", item.label));
+		const label = elem("span", "synapse-list-label", item.label);
+		label.title = String(item.label);
+		rowEl.appendChild(label);
 		rowEl.appendChild(
-			elem("span", "synapse-list-value", formatValue(item.value, config.value_type || "number", {
-				currency: config.currency,
-				precision: config.precision,
-			})),
+			elem(
+				"span",
+				"synapse-list-value",
+				formatValue(item.value, config.value_type || "number", {
+					currency: config.currency,
+					precision: config.precision,
+				})
+			)
 		);
 		wrap.appendChild(rowEl);
 	});
@@ -110,32 +251,49 @@ export function progress(el, config, data) {
 
 	const target = Number(data.target) || 0;
 	const value = Number(data.value) || 0;
-	const ratio = target > 0 ? Math.max(0, Math.min(1, value / target)) : 0;
+	const ratio = target > 0 ? Math.max(0, value / target) : 0;
 
 	const head = elem("div", "synapse-progress-head");
 	head.appendChild(elem("span", "synapse-progress-label", data.label || config.title || ""));
 	const vt = config.value_type || "number";
 	head.appendChild(
-		elem("span", "synapse-progress-figures",
-			formatValue(value, vt, { currency: config.currency }) + " / " + formatValue(target, vt, { currency: config.currency })),
+		elem(
+			"span",
+			"synapse-progress-figures",
+			formatValue(value, vt, { currency: config.currency }) +
+				" / " +
+				formatValue(target, vt, { currency: config.currency })
+		)
 	);
 	wrap.appendChild(head);
 
 	const track = elem("div", "synapse-progress-track");
 	const fill = elem("div", "synapse-progress-fill");
-	fill.style.width = ratio * 100 + "%";
+	fill.style.width = Math.min(1, ratio) * 100 + "%";
+	track.setAttribute("role", "progressbar");
+	track.setAttribute("aria-label", config.title || data.label || "Progress");
+	track.setAttribute("aria-valuemin", "0");
+	track.setAttribute("aria-valuemax", String(Math.max(target, value, 1)));
+	track.setAttribute("aria-valuenow", String(Math.max(0, value)));
 	track.appendChild(fill);
 	wrap.appendChild(track);
 
-	wrap.appendChild(elem("div", "synapse-progress-percent", Math.round(ratio * 100) + "%"));
+	wrap.appendChild(
+		elem("div", "synapse-progress-percent", target > 0 ? Math.round(ratio * 100) + "%" : "No target set")
+	);
 	body.appendChild(wrap);
 	return wrap;
 }
 
 export function pivot(el, config, data) {
-	const ok = data && Array.isArray(data.rowLabels) && Array.isArray(data.colLabels) && Array.isArray(data.cells);
+	const ok =
+		data && Array.isArray(data.rowLabels) && Array.isArray(data.colLabels) && Array.isArray(data.cells);
 	if (!ok) {
-		return placeholder(el, "Pivot data does not fit its template", "Expected { rowLabels, colLabels, cells: [[...]] }");
+		return placeholder(
+			el,
+			"Pivot data does not fit its template",
+			"Expected { rowLabels, colLabels, cells: [[...]] }"
+		);
 	}
 	const body = shell(el, config.title);
 	const t = elem("table", "synapse-table synapse-pivot");
@@ -158,13 +316,29 @@ export function pivot(el, config, data) {
 		data.colLabels.forEach((_c, j) => {
 			const v = cells[j];
 			total += Number(v) || 0;
-			tr.appendChild(elem("td", "text-right", formatValue(v, measureType, { currency: config.currency })));
+			tr.appendChild(
+				elem("td", "text-right", formatValue(v, measureType, { currency: config.currency }))
+			);
 		});
-		if (config.row_totals) tr.appendChild(elem("td", "text-right synapse-pivot-total", formatValue(total, measureType, { currency: config.currency })));
+		if (config.row_totals)
+			tr.appendChild(
+				elem(
+					"td",
+					"text-right synapse-pivot-total",
+					formatValue(total, measureType, { currency: config.currency })
+				)
+			);
 		tbody.appendChild(tr);
 	});
 	t.appendChild(tbody);
-	body.appendChild(t);
+	const scroll = elem("div", "synapse-table-scroll");
+	scroll.tabIndex = 0;
+	scroll.setAttribute("role", "region");
+	scroll.setAttribute("aria-label", config.title || "Data table");
+	scroll.append(t);
+	body.appendChild(scroll);
+	if (t.rows[0]?.cells.length > 3)
+		body.append(elem("div", "synapse-table-hint", "Scroll to see all columns"));
 	return t;
 }
 
@@ -203,8 +377,47 @@ export function text_block(el, config, data) {
 function safeMarkdown(html) {
 	const template = document.createElement("template");
 	template.innerHTML = html;
-	const allowed = new Set(["P", "BR", "STRONG", "B", "EM", "I", "DEL", "S", "CODE", "PRE", "BLOCKQUOTE", "UL", "OL", "LI", "H1", "H2", "H3", "H4", "H5", "H6", "HR", "TABLE", "THEAD", "TBODY", "TR", "TH", "TD", "A"]);
-	const discard = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "SVG", "MATH", "FORM", "TEMPLATE"]);
+	const allowed = new Set([
+		"P",
+		"BR",
+		"STRONG",
+		"B",
+		"EM",
+		"I",
+		"DEL",
+		"S",
+		"CODE",
+		"PRE",
+		"BLOCKQUOTE",
+		"UL",
+		"OL",
+		"LI",
+		"H1",
+		"H2",
+		"H3",
+		"H4",
+		"H5",
+		"H6",
+		"HR",
+		"TABLE",
+		"THEAD",
+		"TBODY",
+		"TR",
+		"TH",
+		"TD",
+		"A",
+	]);
+	const discard = new Set([
+		"SCRIPT",
+		"STYLE",
+		"IFRAME",
+		"OBJECT",
+		"EMBED",
+		"SVG",
+		"MATH",
+		"FORM",
+		"TEMPLATE",
+	]);
 	function copy(source, target) {
 		for (const node of source.childNodes) {
 			if (node.nodeType === Node.TEXT_NODE) {
@@ -222,7 +435,9 @@ function safeMarkdown(html) {
 							clean.setAttribute("href", url.href);
 							clean.setAttribute("rel", "noopener noreferrer");
 						}
-					} catch (_) { /* Ignore invalid links. */ }
+					} catch (_) {
+						/* Ignore invalid links. */
+					}
 				}
 				copy(node, clean);
 				target.appendChild(clean);

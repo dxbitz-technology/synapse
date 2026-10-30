@@ -13,6 +13,9 @@
  "roles": [
   {
    "role": "System Manager"
+  },
+  {
+   "role": "Desk User"
   }
  ],
  "script": null,

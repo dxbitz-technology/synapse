@@ -7,16 +7,16 @@ import { placeholder } from "./theme.js";
 
 export const RENDERERS = {
 	bar_chart: charts.bar_chart,
-	bar_horizontal: charts.bar_horizontal, // not native in this build, placeholder
+	bar_horizontal: charts.bar_horizontal,
 	line_chart: charts.line_chart,
 	area_chart: charts.area_chart,
-	scatter_chart: charts.scatter_chart, // not native in this build, placeholder
+	scatter_chart: charts.scatter_chart,
 	pie_chart: charts.pie_chart,
 	donut_chart: charts.donut_chart,
 	percentage_chart: charts.percentage_chart,
 	mixed_chart: charts.mixed_chart,
 	heatmap: charts.heatmap,
-	map: charts.map, // deferred, placeholder
+	map: charts.map,
 
 	number_card: widgets.number_card,
 	table: widgets.table,

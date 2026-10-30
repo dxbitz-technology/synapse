@@ -1,46 +1,53 @@
 // Copyright (c) 2026, Dxbitz and contributors
 
-import { chartsAvailable, clearEl, placeholder, resolveColors } from "./theme.js";
+import { chartsAvailable, placeholder } from "./theme.js";
+import { chartShell, colors, empty, legend, validAxis, hasValues, text } from "./chart_helpers.js";
+export { scatter_chart, bar_horizontal, map } from "./extra_charts.js";
+export { heatmap } from "./heatmap.js";
 
-const DEFAULT_HEIGHT = 240;
+const DEFAULT_HEIGHT = 260;
 
-
-function mount(el, cfg) {
-	clearEl(el);
+function mount(el, cfg, config, entries) {
+	const body = chartShell(el, config);
+	const host = document.createElement("div");
+	host.className = "synapse-chart-host";
+	body.append(host);
 	try {
-		el.__synapseChart = new frappe.Chart(el, cfg);
+		host.__synapseChart = new frappe.Chart(host, { ...cfg, showLegend: 0 });
+		host.__synapseChart.update(cfg.data);
+		const svg = host.querySelector("svg");
+		if (svg) {
+			svg.setAttribute("role", "img");
+			svg.setAttribute("aria-label", config.title || "Chart");
+		}
+		legend(body, entries, cfg.colors);
+		return host.__synapseChart;
 	} catch (e) {
-		placeholder(el, "This chart could not be drawn", String(e && e.message ? e.message : e));
+		return placeholder(el, "This chart could not be drawn", String(e.message || e));
 	}
-	return el.__synapseChart;
 }
 
 function commonOptions(config, el) {
 	const cfg = {};
-	const colors = resolveColors(config.colors, el);
-	if (colors) cfg.colors = colors;
-	cfg.height = Number(config.height) || DEFAULT_HEIGHT;
-	if (config.animate === false) cfg.animate = 0;
+	cfg.colors = colors(config, el);
+	cfg.height = Math.max(180, Math.min(600, Number(config.height) || DEFAULT_HEIGHT));
+	cfg.disableEntryAnimation = 1;
+	cfg.animate = config.animate === true ? 1 : 0;
 	if (config.truncate_legends) cfg.truncateLegends = 1;
 	return cfg;
 }
 
-function validAxisData(data) {
-	return (
-		data &&
-		Array.isArray(data.labels) &&
-		Array.isArray(data.series) &&
-		data.series.length > 0 &&
-		data.series.every((s) => s && Array.isArray(s.values))
-	);
-}
-
 function axisChart(el, config, data, type, perDatasetType) {
 	if (!chartsAvailable()) return placeholder(el, "Charts are not loaded on this page");
-	if (!validAxisData(data)) {
-		return placeholder(el, "Chart data does not fit its template", "Expected { labels: [...], series: [{ name, values }] }");
+	if (!validAxis(data)) {
+		return placeholder(
+			el,
+			"Chart data does not fit its template",
+			"Expected { labels: [...], series: [{ name, values }] }"
+		);
 	}
 
+	if (!hasValues(data)) return empty(chartShell(el, config));
 	const datasets = data.series.map((s) => {
 		const ds = { name: s.name, values: s.values };
 		if (perDatasetType && s.chartType) ds.chartType = s.chartType;
@@ -53,6 +60,7 @@ function axisChart(el, config, data, type, perDatasetType) {
 		...commonOptions(config, el),
 	};
 
+	cfg.colors = data.series.map((_, i) => cfg.colors[i % cfg.colors.length]);
 	const axisOptions = {};
 	if (config.x_axis_mode) axisOptions.xAxisMode = config.x_axis_mode; // "span" | "tick"
 	if (config.y_axis_mode) axisOptions.yAxisMode = config.y_axis_mode;
@@ -74,33 +82,67 @@ function axisChart(el, config, data, type, perDatasetType) {
 
 	if (config.value_labels) cfg.valuesOverPoints = 1;
 
+	const chart = mount(el, cfg, config, data.series);
 	if (data.axes && (data.axes.x || data.axes.y)) {
-		cfg.axisOptions = cfg.axisOptions || {};
+		const caption = text("div", "synapse-axis-caption", "");
+		if (data.axes.y) caption.append(text("span", "", data.axes.y));
+		if (data.axes.x) caption.append(text("span", "", data.axes.x));
+		el.querySelector(".synapse-chart-body")?.append(caption);
 	}
-
-	return mount(el, cfg);
+	return chart;
 }
 
 function validPartData(data) {
-	return data && Array.isArray(data.labels) && Array.isArray(data.values) && data.values.length > 0;
+	return (
+		data &&
+		Array.isArray(data.labels) &&
+		Array.isArray(data.values) &&
+		data.labels.length === data.values.length &&
+		data.values.every((v) => typeof v === "number" && Number.isFinite(v) && v >= 0)
+	);
 }
 
 function partChart(el, config, data, type) {
 	if (!chartsAvailable()) return placeholder(el, "Charts are not loaded on this page");
 	if (!validPartData(data)) {
-		return placeholder(el, "Chart data does not fit its template", "Expected { labels: [...], values: [...] }");
+		return placeholder(
+			el,
+			"Chart data does not fit its template",
+			"Expected { labels: [...], values: [...] }"
+		);
 	}
 
+	if (!data.values.some((v) => v > 0)) return empty(chartShell(el, config));
+	let entries = data.labels.map((name, i) => ({ name, value: data.values[i] }));
+	const maxSlices = Math.max(2, Math.floor(Number(config.max_slices) || 20));
+	if (entries.length > maxSlices) {
+		entries.sort((a, b) => b.value - a.value);
+		const remainder = entries.slice(maxSlices - 1).reduce((sum, item) => sum + item.value, 0);
+		entries = [...entries.slice(0, maxSlices - 1), { name: "Other categories", value: remainder }];
+	}
 	const cfg = {
 		type,
-		data: { labels: data.labels, datasets: [{ values: data.values }] },
+		data: {
+			labels: entries.map((item) => item.name),
+			datasets: [{ values: entries.map((item) => item.value) }],
+		},
 		...commonOptions(config, el),
+		maxSlices: entries.length + 1,
 	};
-	if (config.max_slices) cfg.maxSlices = Number(config.max_slices);
-	if (config.max_legend_points) cfg.maxLegendPoints = Number(config.max_legend_points);
-	return mount(el, cfg);
+	cfg.colors = entries.map((_, i) => cfg.colors[i % cfg.colors.length]);
+	const chart = mount(el, cfg, config, entries);
+	const maxLegend = Math.max(1, Math.floor(Number(config.max_legend_points) || entries.length));
+	if (entries.length > maxLegend) {
+		const legendRows = el.querySelectorAll(".synapse-legend-item");
+		legendRows.forEach((row, i) => {
+			if (i >= maxLegend) row.remove();
+		});
+		el.querySelector(".synapse-chart-legend")?.append(
+			text("span", "synapse-legend-label", `+${entries.length - maxLegend} categories`)
+		);
+	}
+	return chart;
 }
-
 
 export function bar_chart(el, config, data) {
 	return axisChart(el, config, data, "bar", false);
@@ -127,51 +169,27 @@ export function donut_chart(el, config, data) {
 }
 
 export function percentage_chart(el, config, data) {
-	return partChart(el, config, data, "percentage");
-}
-
-export function heatmap(el, config, data) {
-	if (!chartsAvailable()) return placeholder(el, "Charts are not loaded on this page");
-	if (!data || typeof data.dataPoints !== "object") {
-		return placeholder(el, "Heatmap data does not fit its template", "Expected { dataPoints: { <unix-second>: n }, start, end }");
-	}
-	const cfg = {
-		type: "heatmap",
-		data: {
-			dataPoints: data.dataPoints,
-			start: data.start ? new Date(data.start) : undefined,
-			end: data.end ? new Date(data.end) : undefined,
-		},
-		height: Number(config.height) || DEFAULT_HEIGHT,
-	};
-	if (config.discrete_domains === false) cfg.discreteDomains = 0;
-	if (config.count_label) cfg.countLabel = config.count_label;
-	const colors = resolveColors(config.colors, el);
-	if (colors) cfg.colors = colors;
-	return mount(el, cfg);
-}
-
-
-export function scatter_chart(el /* , config, data */) {
-	return placeholder(
-		el,
-		"scatter_chart is not available",
-		"frappe-charts 2.0.0-rc27 in this bench does not draw scatter. Deferred pending a decision.",
+	if (!validPartData(data)) return placeholder(el, "Chart data does not fit its template");
+	const body = chartShell(el, config);
+	const total = data.values.reduce((a, b) => a + b, 0);
+	if (!total) return empty(body);
+	const palette = colors(config, el);
+	const track = text("div", "synapse-percentage-track", "");
+	data.values.forEach((value, i) => {
+		if (!value) return;
+		const segment = text("div", "synapse-percentage-segment", "");
+		segment.style.flexGrow = String(value);
+		segment.style.background = palette[i % palette.length];
+		segment.title = `${data.labels[i]}: ${value} (${((value / total) * 100).toFixed(1)}%)`;
+		segment.tabIndex = 0;
+		segment.setAttribute("aria-label", segment.title);
+		track.append(segment);
+	});
+	body.append(track);
+	legend(
+		body,
+		data.labels.map((name, i) => ({ name, value: data.values[i] })),
+		palette
 	);
-}
-
-export function bar_horizontal(el /* , config, data */) {
-	return placeholder(
-		el,
-		"bar_horizontal is not available",
-		"frappe-charts in this bench has no horizontal-bar option. Use the list widget for a top-N bar, or defer.",
-	);
-}
-
-export function map(el /* , config, data */) {
-	return placeholder(
-		el,
-		"map is not implemented",
-		"Geographic maps are not available.",
-	);
+	return track;
 }

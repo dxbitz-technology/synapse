@@ -7,8 +7,18 @@ export function cssVar(name, el) {
 }
 
 const PALETTE_FAMILIES = new Set([
-	"blue", "green", "red", "orange", "yellow", "purple",
-	"pink", "cyan", "teal", "violet", "gray", "grey",
+	"blue",
+	"green",
+	"red",
+	"orange",
+	"yellow",
+	"purple",
+	"pink",
+	"cyan",
+	"teal",
+	"violet",
+	"gray",
+	"grey",
 ]);
 
 export function resolveColor(token, el) {
@@ -28,7 +38,13 @@ export function resolveColor(token, el) {
 
 export function resolveColors(colors, el) {
 	if (!Array.isArray(colors) || !colors.length) return undefined;
-	return colors.map((c) => resolveColor(c, el));
+	const fallback = ["#3974d9", "#229a83", "#e3a34a", "#946bca", "#dd7280", "#56a5bd"];
+	return colors.map((c, i) => {
+		const resolved = resolveColor(c, el);
+		return typeof resolved === "string" && CSS.supports("color", resolved)
+			? resolved
+			: fallback[i % fallback.length];
+	});
 }
 
 export function formatValue(value, type, options) {
@@ -38,18 +54,29 @@ export function formatValue(value, type, options) {
 	try {
 		switch (type) {
 			case "currency":
-				if (window.format_currency) return format_currency(value, opts.currency);
-				return String(value);
+				if (window.format_currency) return format_currency(value, opts.currency, opts.precision);
+				return new Intl.NumberFormat(undefined, {
+					style: "currency",
+					currency: opts.currency || "AED",
+					maximumFractionDigits: opts.precision ?? 2,
+				}).format(Number(value));
 			case "int":
 				if (window.frappe && frappe.format_number) return frappe.format_number(value, null, 0);
-				return String(Math.round(value));
+				return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(Number(value));
 			case "float":
 			case "number":
 				if (window.frappe && frappe.format_number) return frappe.format_number(value, null, opts.precision);
-				return String(value);
+				return new Intl.NumberFormat(undefined, { maximumFractionDigits: opts.precision ?? 2 }).format(
+					Number(value)
+				);
 			case "percent":
-				if (window.frappe && frappe.format_number) return frappe.format_number(value, null, opts.precision) + "%";
-				return value + "%";
+				if (window.frappe && frappe.format_number)
+					return frappe.format_number(value, null, opts.precision) + "%";
+				return (
+					new Intl.NumberFormat(undefined, { maximumFractionDigits: opts.precision ?? 2 }).format(
+						Number(value)
+					) + "%"
+				);
 			case "date":
 				if (window.frappe && frappe.datetime && frappe.datetime.str_to_user) {
 					return frappe.datetime.str_to_user(value);
@@ -67,11 +94,16 @@ export function formatValue(value, type, options) {
 
 export function clearEl(el) {
 	if (!el) return;
-	if (el.__synapseChart) {
-		try {
-			el.__synapseChart = null;
-		} catch (e) {
-			/* nothing to do */
+	for (const host of [el, ...el.querySelectorAll(".synapse-chart-host")]) {
+		if (host.__synapseChart) {
+			try {
+				host.__synapseChart.destroy?.();
+				host.__synapseChart.update = () => {};
+				host.__synapseChart.draw = () => {};
+			} catch (_) {
+				/* Detached charts may already be disposed. */
+			}
+			host.__synapseChart = null;
 		}
 	}
 	el.innerHTML = "";

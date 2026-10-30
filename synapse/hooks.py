@@ -18,7 +18,7 @@ add_to_apps_screen = [
 		"logo": "/assets/synapse/images/synapse-mark.svg",
 		"title": "Synapse",
 		"route": "/app/synapse",
-		"has_permission": "synapse.api.has_admin_permission",
+		"has_permission": "synapse.api.has_desk_permission",
 	},
 ]
 

@@ -1,0 +1,58 @@
+{
+ "doctype": "DocType",
+ "name": "Synapse Script",
+ "module": "Synapse",
+ "autoname": "field:script_name",
+ "allow_rename": 1,
+ "track_changes": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "script_name",
+  "enabled",
+  "description",
+  "script"
+ ],
+ "fields": [
+  {
+   "fieldname": "script_name",
+   "fieldtype": "Data",
+   "label": "Script Name",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "script",
+   "fieldtype": "Code",
+   "options": "Python",
+   "label": "Script",
+   "reqd": 1,
+   "description": "Restricted Python. Read parameters from args and assign an object to result. Use frappe.get_list, frappe.get_count, or query(sql, values). SQL requires System Manager and Synapse SQL access. Server scripts must be enabled in bench configuration."
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "share": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}
