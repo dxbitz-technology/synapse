@@ -50,7 +50,9 @@ jobs:
           check-latest: true
 
       - name: Install MariaDB client
-        run: sudo apt-get install -y mariadb-client
+        run: |
+          sudo apt-get install -y mariadb-client
+          printf '[client]\nskip-ssl\n' > "$HOME/.my.cnf"
 
       - name: Set up a Frappe 16 bench
         run: |
