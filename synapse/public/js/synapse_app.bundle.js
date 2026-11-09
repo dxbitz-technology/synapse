@@ -71,11 +71,22 @@
 			const paras = String(a.notes || "No notes yet.")
 				.split(/\n{2,}/)
 				.map((p) => h("p", null, p));
+			const overdue = a.overdue
+				? h(
+						"div",
+						{ class: "sy-overdue", role: "status" },
+						h("span", { class: "bz-pill bz-pill-orange" }, "Refresh overdue"),
+						" This page was due to refresh every " +
+							String(a.refresh || "day").toLowerCase() +
+							". Ask your assistant to refresh it, or set up a scheduled refresh."
+				  )
+				: null;
 			el.replaceChildren(
 				h(
 					"div",
-					{ class: "sy-assistant" },
+					{ class: "sy-assistant" + (a.overdue ? " sy-assistant-late" : "") },
 					h("div", { class: "sy-assistant-h" }, h("span", { class: "bz-pill bz-pill-blue" }, "Assistant"), h("span", { class: "bz-muted" }, when + every)),
+					overdue,
 					h("div", { class: "sy-assistant-b" }, paras)
 				)
 			);

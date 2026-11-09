@@ -403,6 +403,23 @@ def layout_of(doc) -> dict:
 	)
 
 
+REFRESH_EVERY = {"Hour": {"hours": 1}, "Day": {"days": 1}, "Week": {"weeks": 1}}
+
+
+def refresh_due(row) -> bool:
+	"""True when an Assistant page has passed its refresh time, or was never published."""
+	from frappe.utils import add_to_date, get_datetime, now_datetime
+
+	if row.get("data_mode") != "Assistant":
+		return False
+	if not row.get("llm_updated_on"):
+		return True
+	every = REFRESH_EVERY.get(row.get("llm_refresh") or "Day")
+	if not every:
+		return False
+	return add_to_date(get_datetime(row.get("llm_updated_on")), **every) <= now_datetime()
+
+
 def is_assistant(doc) -> bool:
 	return doc.get("data_mode") == "Assistant"
 
@@ -438,6 +455,7 @@ def config_for(doc) -> dict:
 			"notes": doc.get("llm_notes"),
 			"updated_on": str(doc.llm_updated_on) if doc.get("llm_updated_on") else None,
 			"refresh": doc.get("llm_refresh"),
+			"overdue": bool(doc.get("llm_updated_on")) and refresh_due(doc),
 		}
 	return config
 

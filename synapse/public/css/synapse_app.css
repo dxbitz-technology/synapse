@@ -38,3 +38,5 @@ body { display: block; }
 .sy-toast-out { opacity: 0; transform: translateY(6px); }
 
 .sy-tag { margin-left: 10px; vertical-align: 3px; font-size: 11px; cursor: help; }
+.sy-overdue { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; color: var(--bz-text); font-size: 12px; }
+.sy-assistant-late { border-left-color: #e8a33d; }

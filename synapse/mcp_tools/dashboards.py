@@ -44,7 +44,7 @@ GUIDE = {
 		"2. describe_doctype on the main DocType. Use real fieldnames.",
 		"3. aggregate to check the numbers look right (for example sum:base_grand_total by month).",
 		"4. save_dashboard once with the full layout. Read check in the reply. Every widget should have data.",
-		"5. Assistant only: publish_dashboard_snapshot with the data and 2 to 5 short notes.",
+		"5. Assistant only: before saving, ask how often to refresh and recommend one. After saving, publish_dashboard_snapshot with the data and 2 to 5 short notes, then offer a scheduled refresh.",
 		"6. Reply with the link and a one line description of each section.",
 	],
 	"steps_study_my_data": [
@@ -78,7 +78,9 @@ GUIDE = {
 	"assistant": {
 		"publish": "publish_dashboard_snapshot(page, data, notes). data is a dict keyed by widget key in the shapes listed under what_each_widget_gets. Build it from aggregate results.",
 		"notes": "2 to 5 short plain sentences: what changed, why it matters, what to do.",
-		"refresh": "Later, list_dashboards(only_due=True) shows pages to refresh. Read each brief and publish again.",
+		"interval": "Before saving, ask the user how often the page should refresh (Hour, Day, Week, On Request) and recommend one: Day for most pages, Week for briefs and summaries, Hour for live operations. save_dashboard refuses a new Assistant page without refresh_every.",
+		"schedule": "Synapse cannot start you by itself. After publishing, tell the user so, and offer to create a scheduled task in their assistant with the prompt from the reply, at the chosen interval. If you cannot schedule tasks, give them the prompt to schedule themselves.",
+		"refresh": "When the task runs, call list_dashboards(only_due=True), read each brief, gather fresh numbers with aggregate, and publish again. The page shows an overdue warning when a refresh is missed.",
 	},
 	"script": {
 		"receives": "args['filters'] with resolved values (daterange is [from, to]).",
@@ -199,14 +201,38 @@ def _gate_write():
 
 
 def _due(row) -> bool:
-	if row.get("data_mode") != "Assistant":
-		return False
-	every = REFRESH.get(row.get("llm_refresh") or "Day")
-	if not row.get("llm_updated_on"):
-		return True
-	if not every:
-		return False
-	return add_to_date(get_datetime(row.llm_updated_on), **every) <= now_datetime()
+	return dash.refresh_due(row)
+
+
+REFRESH_ADVICE = (
+	"Day suits most pages (sales, receivables, stock). Week suits briefs, trends and management summaries. "
+	"Hour suits live operations such as open orders or today's collections. On Request suits one-off analyses."
+)
+
+
+def _refresh_prompt() -> str:
+	import frappe
+
+	return f"Refresh my due Synapse dashboards on {frappe.local.site}."
+
+
+def _schedule_note(doc) -> dict:
+	"""What the user must know about keeping an Assistant page fresh."""
+	every = doc.get("llm_refresh") or "Day"
+	if every == "On Request":
+		tell = 'This page refreshes only when you ask me to. Say "refresh my Synapse dashboards" any time.'
+	else:
+		tell = (
+			f"This page should refresh every {every.lower()}, but Synapse cannot start me by itself. "
+			f"I can set up a scheduled task in your assistant that runs every {every.lower()}, or you can ask me to refresh it any time. "
+			"Until a refresh runs, the page keeps its last snapshot and shows when it is overdue."
+		)
+	return {
+		"refresh_every": every,
+		"tell_the_user": tell,
+		"scheduled_task_prompt": _refresh_prompt(),
+		"offer": "Offer to create that scheduled task if your client can schedule tasks. Otherwise give the user the prompt to schedule.",
+	}
 
 
 @mcp.tool(
@@ -430,7 +456,9 @@ def save_dashboard(
 	        description: One line for search and the sidebar tooltip.
 	        keywords: Extra search words.
 	        brief: Assistant dashboards: what to track and how to judge it.
-	        refresh_every: Assistant dashboards: Hour, Day, Week or On Request.
+	        refresh_every: Assistant dashboards, required when creating one: Hour, Day, Week or
+	                On Request. Ask the user first and recommend one: Day for most pages, Week
+	                for briefs and summaries, Hour for live operations.
 	        enabled: Show it in the app. New dashboards default to enabled.
 	        validate_only: Check everything and save nothing."""
 
@@ -476,8 +504,15 @@ def save_dashboard(
 		"keywords": keywords if keywords is not None else doc.get("keywords"),
 	}
 	if data_source == "Assistant":
+		if not refresh_every and (not exists or not doc.get("llm_refresh")):
+			frappe.throw(
+				"Not saved. Ask the user how often this page should refresh: Hour, Day, Week or On Request, "
+				f"and recommend one. {REFRESH_ADVICE} Then call save_dashboard again with refresh_every."
+			)
+		if not (brief or doc.get("llm_instructions")):
+			frappe.throw("Not saved. An Assistant page needs a brief: what to track and how to judge it.")
 		values["llm_instructions"] = brief if brief is not None else doc.get("llm_instructions")
-		values["llm_refresh"] = refresh_every or doc.get("llm_refresh") or "Day"
+		values["llm_refresh"] = refresh_every or doc.get("llm_refresh")
 		snapshot = dash.parse(doc.get("snapshot")) or {}
 		if isinstance(snapshot, dict) and view == "Dashboard" and isinstance(layout, dict):
 			keys = set(dash.widget_keys(layout))
@@ -498,10 +533,11 @@ def save_dashboard(
 		"url": frappe.utils.get_url(f"/synapse#/{doc.name}"),
 		"check": loaded,
 		"next": (
-			"Publish data with publish_dashboard_snapshot before telling the user it is ready."
+			"Publish data with publish_dashboard_snapshot, then tell the user the link and the schedule note."
 			if dash.is_assistant(doc)
 			else "Tell the user the link. Filters work in the app."
 		),
+		**({"schedule": _schedule_note(doc)} if dash.is_assistant(doc) else {}),
 	}
 
 
@@ -573,4 +609,5 @@ def publish_dashboard_snapshot(page: str, data: dict | list, notes: str | None =
 		"page": doc.name,
 		"updated_on": str(doc.llm_updated_on),
 		"url": frappe.utils.get_url(f"/synapse#/{doc.name}"),
+		"schedule": _schedule_note(doc),
 	}

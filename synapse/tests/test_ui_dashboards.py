@@ -1,7 +1,7 @@
 """Rules for Synapse app dashboards: layout checks, filters and payload cleaning. No site needed."""
 
 import unittest
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import patch
 
 import frappe
@@ -201,6 +201,17 @@ class TestDataSourceRules(Base):
 			lay["filters"][1], {"key": "st", "type": "select", "options": ["Draft", "Paid", "Overdue"]}
 		)
 		self.assertEqual(lay["filters"][2], {"key": "keep", "type": "date"})
+
+	def test_refresh_is_due_by_interval(self):
+		with patch("frappe.utils.now_datetime", return_value=datetime(2026, 11, 9, 12, 0)):
+			page = {"data_mode": "Assistant", "llm_refresh": "Week"}
+			self.assertTrue(dash.refresh_due(page))  # never published
+			self.assertTrue(dash.refresh_due({**page, "llm_updated_on": "2026-11-01 12:00:00"}))
+			self.assertFalse(dash.refresh_due({**page, "llm_updated_on": "2026-11-05 12:00:00"}))
+			self.assertFalse(
+				dash.refresh_due({**page, "llm_refresh": "On Request", "llm_updated_on": "2020-01-01"})
+			)
+			self.assertFalse(dash.refresh_due({"data_mode": "Query"}))
 
 	def test_queries_never_reach_the_browser(self):
 		lay = {
