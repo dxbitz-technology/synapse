@@ -92,7 +92,7 @@ class TestInitialize(unittest.TestCase):
 		self.assertNotIn("instructions", MCP("s")._initialize({}))
 
 	def test_synapse_instructions_stay_short_and_name_real_tools(self):
-		from synapse.mcp import INSTRUCTIONS
+		from synapse.mcp_instructions import INSTRUCTIONS
 
 		self.assertLess(len(INSTRUCTIONS), 1200)
 		self.assertNotIn("\u2014", INSTRUCTIONS)
