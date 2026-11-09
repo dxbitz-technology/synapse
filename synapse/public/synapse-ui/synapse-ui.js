@@ -964,6 +964,8 @@
     });
     const main = h('main', { class: 'bz-main' });
     const mainbar = h('div', { class: 'bz-mainbar' }, sideBtn(), h('b', null, o.title));
+    // The bar carries the sidebar toggle while the sidebar is hidden, so it is there before any view opens.
+    main.append(mainbar);
     function drawNav() {
       const words = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
       const hit = items.filter(it => { const s = [it.title, it.group, it.description, it.keywords].join(' ').toLowerCase(); return words.every(w => s.includes(w)); });
@@ -1003,6 +1005,8 @@
     el.replaceChildren(root);
     const api = {
       el: root, open: id => { location.hash = '#/' + id; }, view: () => view, refresh: () => view && view.refresh && view.refresh(),
+      // Show a message in place of a view, keeping the sidebar toggle bar.
+      message(node) { main.replaceChildren(mainbar, h('div', { class: 'bz-view' }, node)); },
       setItems(list) { items = list.map(x => Object.assign({}, x, { id: x.id || scrub(x.title).replace(/_/g, '-') })); drawNav(); open(route()); }
     };
     Promise.resolve(typeof o.items === 'function' ? o.items() : o.items || []).then(api.setItems);

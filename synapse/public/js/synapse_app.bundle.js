@@ -220,19 +220,17 @@
 		footer: footer(),
 		items: async () => {
 			let list = [];
+			let failed = null;
 			try {
 				list = (await call("list_dashboards")) || [];
 			} catch (e) {
-				notice(e.message, "error");
+				failed = e;
 			}
 			if (!list.length) {
-				setTimeout(() => {
-					const main = root.querySelector(".bz-main");
-					if (main)
-						main.replaceChildren(
-							h("div", { class: "bz-empty sy-empty" }, "No dashboards yet. Ask an admin to create one or share one with you.")
-						);
-				});
+				const text = failed
+					? "Could not load dashboards: " + (failed.message || failed) + ". Refresh to try again."
+					: "No dashboards yet. Ask an admin to create one or share one with you.";
+				setTimeout(() => app.message(h("div", { class: "bz-empty sy-empty" + (failed ? " sy-error" : "") }, text)));
 			}
 			return list.map((m) => Object.assign({}, m, { load: async (it) => buildConfig(await call("get_dashboard", { name: it.id })) }));
 		},
