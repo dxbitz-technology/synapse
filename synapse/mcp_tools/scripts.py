@@ -15,6 +15,9 @@ from synapse.mcp_tools.policy import READ, check
 def execute_synapse_script(name: str, args: dict | None = None):
 	"""Run an enabled Synapse Script and return its current data.
 
+	Pass args the way the page passes them. Synapse app dashboards send
+	{"filters": {...}} with the same keys repeated at the top level.
+
 	Args:
 	        name: The saved Synapse Script name.
 	        args: Optional script parameters as an object.
@@ -32,7 +35,9 @@ def execute_synapse_script(name: str, args: dict | None = None):
 )
 @audit.audited(audit.READ)
 def get_dashboard_contract(component_type: str | None = None):
-	"""Read this before generating a Synapse dashboard or data script.
+	"""Legacy block pages only (the desk viewer at /app/synapse-view).
+
+	For dashboards in the Synapse app at /synapse, call get_dashboard_guide instead.
 
 	Returns supported component schemas, valid examples, restricted Python templates,
 	page/block fields and runtime rules. Use current DocType metadata for real fields.
@@ -97,7 +102,9 @@ def validate_dashboard_component(
 	data_script: str | None = None,
 	args: dict | None = None,
 ):
-	"""Validate generated data or execute a saved script with the dashboard's runtime.
+	"""Legacy block pages only: validate one block's data or run its saved script.
+
+	For dashboards in the Synapse app, use preview_dashboard_data instead.
 
 	Args:
 	        component_type: Supported catalog key.

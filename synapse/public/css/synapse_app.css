@@ -1,0 +1,29 @@
+/* Copyright (c) 2026, Dxbitz and contributors */
+/* Only what SynapseUI does not draw: the sidebar footer, assistant notes and notices. */
+
+html, body { margin: 0; background: var(--bz-page); }
+/* desk.bundle.css makes body a flex row, which would shrink the app to its content. */
+body { display: block; }
+#synapse-app { width: 100%; min-height: 100vh; }
+
+.sy-foot-wrap { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--bz-border); }
+.sy-foot { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
+.sy-mcp-btn { justify-content: flex-start; gap: 8px; margin: 0 4px; }
+.sy-link-ico { width: 14px; height: 14px; flex: none; background: currentColor; opacity: .75;
+	-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'/%3E%3C/svg%3E") center / contain no-repeat;
+	mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'/%3E%3C/svg%3E") center / contain no-repeat; }
+.sy-apps-btn { flex: 1; justify-content: flex-start; gap: 8px; }
+.sy-grid-ico { display: inline-grid; grid-template-columns: 5px 5px; gap: 2px; }
+.sy-grid-ico i { width: 5px; height: 5px; border-radius: 1.5px; background: currentColor; opacity: .75; }
+.sy-user { flex: none; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; overflow: hidden; cursor: pointer; background: var(--bz-control); color: var(--bz-text); font: 600 11px/30px var(--bz-font); }
+.sy-user img { width: 100%; height: 100%; object-fit: cover; }
+
+.sy-assistant { padding: 12px 14px; border: 1px solid var(--bz-border); border-left: 3px solid var(--bz-c1); border-radius: var(--bz-radius); background: var(--bz-card); }
+.sy-assistant-h { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.sy-assistant-b p { margin: 6px 0 0; color: var(--bz-text); line-height: 1.5; max-width: 90ch; }
+
+.sy-empty { margin: 48px auto; max-width: 420px; }
+
+.sy-toast { position: fixed; right: 16px; bottom: 16px; z-index: 100; max-width: min(360px, calc(100vw - 32px)); padding: 10px 14px; border-radius: var(--bz-radius); background: var(--bz-text); color: var(--bz-page); font: 13px/1.4 var(--bz-font); box-shadow: 0 6px 20px rgba(0, 0, 0, .18); transition: opacity .3s, transform .3s; }
+.sy-toast-error { background: #c92a2a; color: #fff; }
+.sy-toast-out { opacity: 0; transform: translateY(6px); }

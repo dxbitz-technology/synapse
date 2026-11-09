@@ -61,6 +61,7 @@ def _build() -> Policy:
 		write_enabled=bool(doc.enable_write_tools),
 		sql_enabled=bool(doc.enable_sql_tool) and sql_access,
 		custom_enabled=bool(doc.get("enable_custom_tools")),
+		dashboard_tools_on=bool(doc.get("enable_dashboard_tools")),
 		full_access=full_access,
 		config_writer=config_writer,
 		grants=grants,
@@ -148,6 +149,18 @@ def operate_tools_enabled() -> bool:
 		return True
 
 	return any("operate" in actions for actions in policy.grants.values())
+
+
+def dashboard_tools_enabled() -> bool:
+	"""The dashboard write tools have their own switch.
+
+	They write only Synapse Pages, so they do not need the general write tools
+	turned on. The caller still needs a write grant on Synapse Page in one of
+	their profiles.
+	"""
+
+	policy = get_policy()
+	return policy.enabled and policy.dashboard_tools_on and "write" in policy.granted_actions("Synapse Page")
 
 
 def sql_tool_enabled() -> bool:

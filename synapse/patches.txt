@@ -7,3 +7,4 @@
 # in the desk. The one thing seeded is the read-layer component catalog, which is
 # app-owned and re-seeded idempotently from synapse/components/catalog.py.
 synapse.patches.seed_components
+synapse.patches.point_desktop_icon_to_app

@@ -51,6 +51,7 @@ ALWAYS_DENIED = frozenset(
 		"synapse doctype access",
 		"synapse denied doctype",
 		"synapse log",
+		"synapse user filter",
 	}
 )
 
@@ -96,6 +97,7 @@ class Policy:
 	write_enabled: bool = False
 	sql_enabled: bool = False
 	custom_enabled: bool = False
+	dashboard_tools_on: bool = False
 	full_access: bool = False
 	config_writer: bool = False
 	grants: dict[str, frozenset] = field(default_factory=dict)

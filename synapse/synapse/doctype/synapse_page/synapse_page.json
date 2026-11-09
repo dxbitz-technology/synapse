@@ -9,7 +9,24 @@
   "title",
   "page_name",
   "enabled",
-  "intro_html",
+  "data_mode",
+  "view_type",
+  "column_break_meta",
+  "page_group",
+  "subtitle",
+  "description",
+  "keywords",
+  "section_layout",
+  "layout_help",
+  "layout",
+  "data_script",
+  "snapshot",
+  "section_assistant",
+  "llm_instructions",
+  "llm_refresh",
+  "column_break_assistant",
+  "llm_updated_on",
+  "llm_notes",
   "section_blocks",
   "blocks"
  ],
@@ -28,7 +45,7 @@
    "reqd": 1,
    "unique": 1,
    "in_list_view": 1,
-   "description": "The slug used in the route /app/synapse-view/<name>. Lowercase, no spaces."
+   "description": "The slug used in the routes /synapse/d/<name> and /app/synapse-view/<name>. Lowercase, no spaces."
   },
   {
    "fieldname": "enabled",
@@ -37,14 +54,121 @@
    "default": "1"
   },
   {
-   "fieldname": "intro_html",
+   "fieldname": "data_mode",
+   "fieldtype": "Select",
+   "label": "Data Source",
+   "options": "Script\nAssistant",
+   "default": "Script",
+   "in_list_view": 1,
+   "description": "Script: each block runs its saved Data Script when the dashboard opens. Assistant: a connected LLM keeps the blocks up to date as stored JSON through the publish_dashboard_snapshot tool."
+  },
+  {
+   "fieldname": "view_type",
+   "fieldtype": "Select",
+   "label": "View",
+   "options": "Dashboard\nReport",
+   "default": "Dashboard",
+   "in_list_view": 1,
+   "description": "Dashboard: sections of widgets. Report: filters and one full width table."
+  },
+  {
+   "fieldname": "column_break_meta",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "page_group",
+   "fieldtype": "Data",
+   "label": "Group",
+   "description": "Sidebar group in the Synapse app, for example Sales or Finance."
+  },
+  {
+   "fieldname": "subtitle",
+   "fieldtype": "Data",
+   "label": "Subtitle"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description",
+   "description": "Shown on the dashboard card in the Synapse app."
+  },
+  {
+   "fieldname": "keywords",
+   "fieldtype": "Data",
+   "label": "Search Keywords"
+  },
+  {
+   "fieldname": "section_layout",
+   "fieldtype": "Section Break",
+   "label": "Layout and Data"
+  },
+  {
+   "fieldname": "layout_help",
    "fieldtype": "HTML",
-   "options": "<p class=\"text-muted small\">Blocks use a 12-column grid. Choose a Data Script for current data on opening and refresh, or use Frozen Data for a saved snapshot.</p>"
+   "options": "<p class=\"text-muted small\">Layout is the Synapse UI config as JSON: filters, sections and widgets (dashboard), or filters and table options (report). Each widget key matches a key in the data. Script dashboards get their data from one Data Script that receives the filters and returns a dict keyed by widget key. Assistant dashboards keep that dict in Snapshot, written by the connected LLM.</p>"
+  },
+  {
+   "fieldname": "layout",
+   "fieldtype": "Code",
+   "label": "Layout",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "data_script",
+   "fieldtype": "Link",
+   "label": "Data Script",
+   "options": "Synapse Script",
+   "depends_on": "eval:doc.data_mode!='Assistant'"
+  },
+  {
+   "fieldname": "snapshot",
+   "fieldtype": "Code",
+   "label": "Snapshot",
+   "options": "JSON",
+   "depends_on": "eval:doc.data_mode=='Assistant'",
+   "read_only_depends_on": "eval:1"
+  },
+  {
+   "fieldname": "section_assistant",
+   "fieldtype": "Section Break",
+   "label": "Assistant",
+   "depends_on": "eval:doc.data_mode=='Assistant'"
+  },
+  {
+   "fieldname": "llm_instructions",
+   "fieldtype": "Small Text",
+   "label": "Brief for the Assistant",
+   "description": "What this dashboard should track. The assistant reads this when it refreshes the page."
+  },
+  {
+   "fieldname": "llm_refresh",
+   "fieldtype": "Select",
+   "label": "Refresh Every",
+   "options": "Hour\nDay\nWeek\nOn Request",
+   "default": "Day"
+  },
+  {
+   "fieldname": "column_break_assistant",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "llm_updated_on",
+   "fieldtype": "Datetime",
+   "label": "Last Updated By Assistant",
+   "read_only": 1
+  },
+  {
+   "fieldname": "llm_notes",
+   "fieldtype": "Long Text",
+   "label": "Assistant Notes",
+   "description": "The assistant's summary and reasoning, shown on the dashboard."
   },
   {
    "fieldname": "section_blocks",
    "fieldtype": "Section Break",
-   "label": "Blocks"
+   "label": "Legacy Blocks",
+   "collapsible": 1,
+   "description": "Blocks for the older desk viewer at /app/synapse-view. The Synapse app uses Layout instead."
   },
   {
    "fieldname": "blocks",
@@ -55,7 +179,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-09-04 00:00:00.000000",
+ "modified": "2026-11-09 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Synapse",
  "name": "Synapse Page",

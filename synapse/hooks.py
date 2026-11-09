@@ -17,9 +17,13 @@ add_to_apps_screen = [
 		"name": "synapse",
 		"logo": "/assets/synapse/images/synapse-mark.svg",
 		"title": "Synapse",
-		"route": "/app/synapse",
+		"route": "/synapse",
 		"has_permission": "synapse.api.has_desk_permission",
 	},
+]
+
+website_route_rules = [
+	{"from_route": "/synapse/<path:app_path>", "to_route": "synapse"},
 ]
 
 doctype_js = {

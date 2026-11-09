@@ -48,6 +48,9 @@ def report_text() -> str:
 		f"  [{'  on  ' if s.get('enable_custom_tools') else ' off  '}] Custom tools from other apps (also needs a profile to list each)"
 	)
 	lines.append(
+		f"  [{'  on  ' if s.get('enable_dashboard_tools') else ' off  '}] Dashboard tools (also needs a profile with write on Synapse Page)"
+	)
+	lines.append(
 		f"  [{'  on  ' if s.get('allow_config_writes') else ' off  '}] System Manager config writes (create/update on read-only backstop DocTypes)"
 	)
 	lines.append(f"         Row limit: {settings.row_limit()}   Retention: {settings.retention_days()} days")

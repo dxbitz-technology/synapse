@@ -15,6 +15,9 @@ class SynapsePage(Document):
 	def validate(self):
 		if not re.fullmatch(r"[a-z0-9]+(?:[-_][a-z0-9]+)*", self.page_name or ""):
 			frappe.throw(frappe._("Route Name must use lowercase letters, numbers, hyphens or underscores."))
+		from synapse.dashboards import validate_page
+
+		validate_page(self)
 		for i, block in enumerate(self.blocks or [], start=1):
 			try:
 				definition = validate_component(block.component_type, json_object(block.config))

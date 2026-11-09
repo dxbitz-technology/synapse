@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Synapse</title>
+	<link rel="icon" href="/assets/synapse/images/synapse-mark.svg">
+	{{ include_style("desk.bundle.css") }}
+	<link rel="stylesheet" href="/assets/synapse/synapse-ui/synapse-ui.css?v={{ asset_version }}">
+	<link rel="stylesheet" href="/assets/synapse/css/synapse_app.css?v={{ asset_version }}">
+</head>
+<body>
+	<div id="synapse-app"></div>
+	<script>window.synapse_boot = {{ boot | safe }};</script>
+	<script src="/assets/synapse/synapse-ui/synapse-ui.js?v={{ asset_version }}"></script>
+	{{ include_script("synapse_app.bundle.js") }}
+</body>
+</html>
