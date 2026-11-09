@@ -1,6 +1,7 @@
 # Synapse
 
-An MCP server for Frappe 16 and ERPNext, with access profiles and an audit log.
+An MCP server for Frappe 16 and ERPNext, with access profiles, an audit log and
+a dashboard app.
 
 - [Documentation](https://github.com/dxbitz-technology/synapse/wiki/Documentation)
 - [Endpoints](https://github.com/dxbitz-technology/synapse/wiki/Endpoints)
@@ -13,129 +14,149 @@ For security reports, email info@dxbitz.com.
 Licensed under AGPL-3.0-or-later. The adapted MCP core includes its original
 [MIT notice](synapse/mcp_core/LICENSE).
 
-## Live dashboard data
-
-Create a **Synapse Script** in Desk. Read parameters from `args` and assign the
-component's data object to `result`. For example, a Number Card script:
-
-```python
-result = {"value": frappe.get_count("Task", filters={"status": "Open"})}
-```
-
-`frappe.get_list(doctype, filters=..., fields=..., limit=...)` and
-`frappe.get_count(doctype, filters=...)` enforce Synapse profile grants and Frappe
-permissions. Scripts have no document write, unrestricted `get_all`, import,
-network, or other-script execution API.
-
-For aggregate queries, System Managers with Synapse SQL access can use bound
-parameters:
-
-```python
-rows = query(
-    "SELECT COUNT(name) AS total FROM `tabTask` WHERE status = %(status)s",
-    {"status": args.get("status", "Open")},
-)
-result = {"value": rows[0]["total"]}
-```
-
-`frappe.db.sql(query, values)` is an alias for `query(query, values)`. Only SELECT
-queries accepted by Synapse's existing SQL guard run. Queries have a 15-second
-statement timeout and the Synapse row cap. SQL does not apply record-level Frappe
-permissions, so it additionally requires System Manager and the existing SQL
-profile/configuration gates.
-
-On a **Synapse Page** block, select **Data Script** and optionally set **Script
-Parameters (JSON)**, for example `{"status": "Open"}`. The script runs on opening
-and when **Refresh** is clicked. Its result must match the component's Data
-Template. Blocks without a script keep using Frozen Data. A failed script shows
-an error on that block without presenting old data as current.
-
-Call the same function directly with the authenticated API method
-`synapse.scripts.run_script`, passing `name` and optional `args`, or through the
-MCP tool `execute_synapse_script`. Callers need read access to the script and a
-Synapse profile allowing reads of Synapse Script and any queried DocTypes. Calls
-are audited. Only System Managers can maintain script definitions; remote writes
-also require Synapse's existing configuration-write setting.
-
-After updating the app, migrate the target site and build Synapse's assets.
-Frappe's bench-level `server_script_enabled` setting must be enabled by the
-operator. Synapse respects this switch and does not enable it automatically.
-
-## Chart library review
-
-The library includes 11 charts, seven widgets and three layout components.
-Scatter and grouped horizontal bars use local renderers. The point map bundles
-[Natural Earth](https://www.naturalearthdata.com/about/terms-of-use/) land outlines
-in the public domain; no map service or API key is required. Map data is
-`{"points": [{"label": "Dubai", "latitude": 25.2, "longitude": 55.27, "value": 12}]}`.
-Scatter uses numeric `labels` for x coordinates and matching series values for y.
-
-The visual gallery is at `synapse/tests/visual/index.html`. Serve the bench root
-on localhost and open `/apps/synapse/synapse/tests/visual/index.html`. It includes
-every renderer, edge cases, and Sales, Buying, Stock and Projects examples.
-Sample data is labelled. A theme switch and narrow viewports exercise dark mode
-and responsive layouts. `scripts/validate_visual_samples.py` checks every sample
-against the same component schemas used for saved dashboards.
-
-To generate local aggregate snapshots, run from the bench's `sites` directory:
+## Setup
 
 ```sh
-../env/bin/python ../apps/synapse/scripts/review_dashboards.py --site int.local \
-  --output ../apps/synapse/synapse/tests/visual/local-dashboards.json
+bench get-app https://github.com/dxbitz-technology/synapse
+bench --site your.site install-app synapse
+bench build --app synapse
 ```
 
-Use the intended local site name. The exporter exercises restricted script
-execution with test-only script documents and scripting/SQL gate overrides.
-It does not enable server scripts, alter site records, or prove deployed access
-configuration. Its output is ignored by Git. In the module previews, choose
-**Use local snapshot** to view those aggregates instead of sample data.
+Data Scripts run through Frappe's safe exec. Turn it on for the bench:
 
-## Dashboard access and editing
+```sh
+bench set-config -g server_script_enabled 1
+```
 
-Open **Synapse** from the Apps screen to find dashboards you can read. System
-Managers also have shortcuts to Pages, Data Scripts, Components, Profiles,
-Settings and the Audit Log. Search filters the available dashboard cards.
+This is a bench setting, so it enables Server Scripts on every site of the bench.
+Synapse never turns it on by itself.
 
-Pages stay private by default. System Managers can use the standard **Share**
-control on a Synapse Page to give a Desk user read access. Sharing a page does
-not grant source-document access. For scripted blocks, also share the Synapse
-Script and grant Synapse reads of **Synapse Script** and its source DocTypes
-through the reader's profile. Normal Frappe permissions still apply. SQL remains
-restricted to System Managers with SQL access. Frozen snapshots are visible to
-page readers without rechecking access to their original source records.
+Then open **Synapse Settings** in Desk, enable the endpoint, and create a
+**Synapse Profile** for the roles that may connect. A user with no matching
+profile reaches nothing.
 
-On a Synapse Page, use **Add Component** or a block's **Configure / Preview**
-button. Choose the component, width and data source. The dialog includes valid
-example data and the accepted options/data schemas. **Use Example Data** resets
-the block to a sample snapshot. **Preview Component** checks and renders the
-current inputs; scripted previews use the saved script and current user's
-access. **Apply** validates configuration without executing live scripts. Saving
-the page validates every block again. **Open Dashboard** opens the saved result.
+## Connect an MCP client
 
-On a Synapse Script, **Component Templates** supplies restricted Python examples
-for each data component. These templates contain example values, not business
-queries. Inspect actual DocType fields and replace the values with permitted
-reads. **Test Component Output** lets you select the target component, parameters
-and options, then run and preview the saved script. Unsaved scripts must be
-saved before testing.
+Open the Synapse app and click **Copy MCP link** at the bottom of the sidebar.
+Add that link to your MCP client as a remote server. The client signs in with
+OAuth, so OAuth Settings must allow dynamic client registration.
 
-For MCP clients generating dashboards, call **get_dashboard_contract** before
-writing a page or script. It returns the same schemas, examples, script templates
-and runtime rules used by the editor. Call **validate_dashboard_component** with
-a data object or saved script before saving a page. Existing create/update tools
-retain their normal write and configuration-write gates. Script output, preview,
-snapshot validation and saved-page rendering use the same component contract.
-Series lengths, part-chart values and pivot dimensions must match their labels.
+Every call runs as the signed-in user. Profiles decide which DocTypes and actions
+are reachable, and Frappe permissions still apply. Every call is written to the
+Synapse Log.
 
-Dashboard layouts load before scripted data. Up to three scripted blocks load
-at a time. Failed blocks show an error independently and never fall back to an
-old snapshot. Refresh fetches current data again; navigating away discards late
-responses. The footer identifies dashboards containing saved snapshots.
-Tables support search, numeric/text sorting and pagination (20 rows by default).
-Options are `page_size` (1–100), `searchable` and `sortable`. For record links,
-use a column with `type: "link"` and `doctype: "Sales Invoice"`; document access
-is still checked when the record is opened.
+When a client connects, Synapse sends a few lines of instructions: describe a
+DocType before using it, prefer filtered reads over SQL, confirm writes with the
+user, and read `get_dashboard_guide` before working on dashboards.
 
-After updating an existing site, run its normal migration and build the Synapse
-assets. Sites with custom DocPerm overrides may need their administrator to
-review those overrides; migration does not replace custom permission policy.
+## The Synapse app
+
+The Synapse icon on the Apps screen opens the dashboard app at `/synapse`.
+
+- The sidebar lists every dashboard and report you can read, by group, with search
+  (press `/`).
+- Each dashboard loads its data in one call and reloads when a filter changes.
+- **Save filters** keeps your filter values. They open as your defaults next time.
+  **Clear saved filters** goes back to the page defaults.
+- The sidebar footer has an app switcher, your account menu and the MCP link.
+- Light, dark and system themes follow your Desk theme.
+
+The app draws everything with the Synapse UI kit in `synapse/public/synapse-ui`.
+Its README documents every widget, chart data shape and option.
+
+## Building a dashboard
+
+A dashboard is a **Synapse Page** with a **Layout** and one data source.
+
+**Layout** is JSON in the Synapse UI format: `filters` plus `sections` of
+`widgets` (a dashboard), or `filters` plus `table` options (a report). Every
+widget has a `key`.
+
+```json
+{
+  "filters": [{"key": "period", "label": "Period", "type": "daterange", "default": "this_year"}],
+  "sections": [
+    {"key": "kpi", "collapsible": false, "widgets": [
+      {"key": "order_value", "type": "stat", "col": 4, "label": "Order value", "format": "currency"}
+    ]},
+    {"key": "customers", "title": "Customers", "widgets": [
+      {"key": "by_customer", "type": "bar", "col": 12, "horizontal": true, "format": "ccompact"}
+    ]}
+  ]
+}
+```
+
+Sections can hold child `sections`, up to 4 levels. Child sections are indented
+and collapse on their own. Tables and lists take `groupBy` as one key or a list of
+keys, for groups inside groups.
+
+**Data Source: Script.** Pick one **Synapse Script**. It receives the resolved
+filters in `args["filters"]` and returns one dict keyed by widget key:
+
+```python
+f = args["filters"]
+rows = query(
+    """select customer, sum(base_grand_total) as total from `tabSales Order`
+    where docstatus = 1 and transaction_date between %(a)s and %(b)s
+    group by customer order by total desc limit 10""",
+    {"a": f["period"][0], "b": f["period"][1]},
+)
+total = 0
+for r in rows:
+    total += r["total"]
+result = {"order_value": {"value": total}, "by_customer": rows}
+```
+
+A report returns rows, or `{"columns": [...], "result": rows}`.
+
+Scripts can use `frappe.get_list` and `frappe.get_count`, which keep Synapse
+grants and Frappe permissions, and `query(sql, values)` for bound read-only SQL
+(System Manager with SQL access). Scripts cannot import, write, call the network
+or run other scripts. Variables made in a script are not visible inside list or
+dict comprehensions, so build lists with loops.
+
+**Data Source: Assistant.** The data dict is stored on the page and written by a
+connected LLM with `publish_dashboard_snapshot`. Fill in **Brief for the
+Assistant** and **Refresh Every**. The assistant's notes show above the widgets.
+Filters do nothing on Assistant dashboards, and html widgets are not allowed.
+
+Data never changes how a widget draws itself. Template, style and script keys in
+data are removed, and links must be site paths or http(s).
+
+## MCP tools for dashboards
+
+| Tool | What it does |
+|---|---|
+| `get_dashboard_guide` | The full contract: layout, widgets, data shapes, filters, scripts, Assistant rules, an example |
+| `list_dashboards` | Dashboards you can read, their data source, and which Assistant ones are due |
+| `get_dashboard` | One dashboard's layout, source, brief and current snapshot |
+| `preview_dashboard_data` | Runs a load as the browser does and lists widgets that got no data |
+| `save_dashboard` | Creates or changes a dashboard. Arguments left out keep their values |
+| `publish_dashboard_snapshot` | Stores new data and notes on an Assistant dashboard |
+
+The two write tools need the **Dashboard tools** switch in Synapse Settings and a
+profile with write on Synapse Page. They write only Synapse Pages, so the general
+write tools can stay off. Data Scripts are still created by a System Manager.
+
+## Sharing
+
+Pages are private by default. Use **Share** on a Synapse Page to give a Desk user
+read access. For Script dashboards, also share the Synapse Script and grant the
+reader's profile reads on Synapse Script and the source DocTypes. Assistant
+snapshots are visible to anyone who can read the page, without rechecking the
+records they came from.
+
+## Legacy block pages
+
+Pages with **Legacy Blocks** and no Layout still open in the desk viewer at
+`/app/synapse-view/<page>`. They use the older component library in
+`synapse/public/js/library` and the MCP tools `get_dashboard_contract` and
+`validate_dashboard_component`. New dashboards should use the Synapse app.
+
+## Tests
+
+```sh
+python -m unittest discover -s synapse -p 'test_mcp_*.py' -t .
+```
+
+These need no site. Site tests run with `bench run-tests --app synapse`.

@@ -83,6 +83,23 @@ class TestToolRegistration(unittest.TestCase):
 		self.assertNotIn("securitySchemes", self.tool.as_listing())
 
 
+class TestInitialize(unittest.TestCase):
+	def test_instructions_are_sent_only_when_set(self):
+		with_text = MCP("s", instructions="Read the guide first.")._initialize(
+			{"protocolVersion": "2025-06-18"}
+		)
+		self.assertEqual(with_text["instructions"], "Read the guide first.")
+		self.assertNotIn("instructions", MCP("s")._initialize({}))
+
+	def test_synapse_instructions_stay_short_and_name_real_tools(self):
+		from synapse.mcp import INSTRUCTIONS
+
+		self.assertLess(len(INSTRUCTIONS), 1200)
+		self.assertNotIn("\u2014", INSTRUCTIONS)
+		for tool in ("describe_doctype", "get_list", "get_count", "run_sql_query", "get_dashboard_guide"):
+			self.assertIn(tool, INSTRUCTIONS)
+
+
 class TestDocstring(unittest.TestCase):
 	def test_summary_stops_at_args(self):
 		summary, args = split_docstring(sample.__doc__)

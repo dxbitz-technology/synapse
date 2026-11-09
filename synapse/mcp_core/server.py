@@ -74,6 +74,7 @@ class MCP:
 		on_refusal: Callable | None = None,
 		external_tools: Callable | None = None,
 		oauth_scopes: tuple[str, ...] | None = None,
+		instructions: str | None = None,
 	):
 		"""Args:
 		name: Server name reported to clients at `initialize`.
@@ -82,13 +83,17 @@ class MCP:
 		        is turned away before the tool body runs, unknown tool, missing
 		        role, bad arguments. The app uses it to keep those attempts in
 		        its audit trail; without it they would leave no trace, which is
-		        the opposite of what an audit trail is for."""
+		        the opposite of what an audit trail is for.
+		instructions: Short guidance sent to clients at `initialize`. Clients
+		        may add it to the model's context, so keep it to what a model
+		        must know before its first call."""
 
 		self._name = name
 		self._version = version
 		self._on_refusal = on_refusal
 		self._external_tools = external_tools
 		self.oauth_scopes = oauth_scopes
+		self._instructions = instructions
 		self._tools: dict[str, Tool] = {}
 		self._entry_fn: Callable | None = None
 
@@ -205,11 +210,14 @@ class MCP:
 		requested = params.get("protocolVersion")
 		protocol = requested if requested in SUPPORTED_PROTOCOLS else SUPPORTED_PROTOCOLS[0]
 
-		return {
+		result = {
 			"protocolVersion": protocol,
 			"serverInfo": {"name": self._name, "version": self._version},
 			"capabilities": {"tools": {"listChanged": False}},
 		}
+		if self._instructions:
+			result["instructions"] = self._instructions
+		return result
 
 	def _call_tool(self, params: dict) -> dict:
 		name = params.get("name")
