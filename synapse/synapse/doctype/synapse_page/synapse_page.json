@@ -57,10 +57,10 @@
    "fieldname": "data_mode",
    "fieldtype": "Select",
    "label": "Data Source",
-   "options": "Script\nAssistant",
-   "default": "Script",
+   "options": "Query\nScript\nAssistant",
+   "default": "Query",
    "in_list_view": 1,
-   "description": "Script: each block runs its saved Data Script when the dashboard opens. Assistant: a connected LLM keeps the blocks up to date as stored JSON through the publish_dashboard_snapshot tool."
+   "description": "Query: each widget names its data (DocType, totals, grouping) and Synapse runs it live. No code. Script: one Synapse Script returns all widget data, for logic a query cannot express. Assistant: a connected LLM stores the data with publish_dashboard_snapshot. Assistant pages have no filters."
   },
   {
    "fieldname": "view_type",
@@ -105,7 +105,7 @@
   {
    "fieldname": "layout_help",
    "fieldtype": "HTML",
-   "options": "<p class=\"text-muted small\">Layout is the Synapse UI config as JSON: filters, sections and widgets (dashboard), or filters and table options (report). Each widget key matches a key in the data. Script dashboards get their data from one Data Script that receives the filters and returns a dict keyed by widget key. Assistant dashboards keep that dict in Snapshot, written by the connected LLM.</p>"
+   "options": "<p class=\"text-muted small\">Layout is the Synapse UI config as JSON: filters, sections and widgets (dashboard), or filters and table options (report). Each widget key matches a key in the data. On Query dashboards each widget has a query, for example {\"doctype\": \"Sales Invoice\", \"metrics\": [\"sum:base_grand_total\"], \"group_by\": [\"customer\"]}, and bind maps page filters to its fields. Ask your MCP assistant for get_dashboard_guide for the full format.</p>"
   },
   {
    "fieldname": "layout",
@@ -118,7 +118,7 @@
    "fieldtype": "Link",
    "label": "Data Script",
    "options": "Synapse Script",
-   "depends_on": "eval:doc.data_mode!='Assistant'"
+   "depends_on": "eval:doc.data_mode=='Script'"
   },
   {
    "fieldname": "snapshot",

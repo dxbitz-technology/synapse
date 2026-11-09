@@ -22,14 +22,13 @@ bench --site your.site install-app synapse
 bench build --app synapse
 ```
 
-Data Scripts run through Frappe's safe exec. Turn it on for the bench:
+Query and Assistant dashboards need nothing more. Script dashboards run through
+Frappe's safe exec, which is a bench setting that enables Server Scripts on every
+site of the bench. Turn it on only if you need Script dashboards:
 
 ```sh
 bench set-config -g server_script_enabled 1
 ```
-
-This is a bench setting, so it enables Server Scripts on every site of the bench.
-Synapse never turns it on by itself.
 
 Then open **Synapse Settings** in Desk, enable the endpoint, and create a
 **Synapse Profile** for the roles that may connect. A user with no matching
@@ -66,59 +65,60 @@ Its README documents every widget, chart data shape and option.
 
 ## Building a dashboard
 
-A dashboard is a **Synapse Page** with a **Layout** and one data source.
+The quickest way: connect an MCP client and ask, for example "build a sales
+dashboard by customer for this year" or "study my sales data and suggest
+dashboards". The assistant reads `get_dashboard_guide` and saves the page in one
+call. No code is written.
+
+A dashboard is a **Synapse Page** with a **Layout** and one **Data Source**:
+
+| Data Source | Data | Filters | Use it for |
+|---|---|---|---|
+| Query (default) | Each widget names its data. Synapse runs it live with the viewer's permissions | Yes | Totals, counts, trends, rankings, top lists |
+| Assistant | Stored JSON, written by the connected LLM and refreshed on a schedule | No | Summaries, risks, picks, commentary |
+| Script | One Synapse Script returns all widget data | Yes | Logic a query cannot express |
+
+The app tags each page **Live** (Query or Script) or **Assistant**. Assistant
+pages cannot have filters, so build one page per period or company when needed.
 
 **Layout** is JSON in the Synapse UI format: `filters` plus `sections` of
-`widgets` (a dashboard), or `filters` plus `table` options (a report). Every
-widget has a `key`.
+`widgets` (a dashboard), or `filters` plus `table` options (a report). On a Query
+dashboard each widget carries a `query` and a `bind` that maps page filters to
+its fields:
 
 ```json
 {
   "filters": [{"key": "period", "label": "Period", "type": "daterange", "default": "this_year"}],
-  "sections": [
-    {"key": "kpi", "collapsible": false, "widgets": [
-      {"key": "order_value", "type": "stat", "col": 4, "label": "Order value", "format": "currency"}
-    ]},
-    {"key": "customers", "title": "Customers", "widgets": [
-      {"key": "by_customer", "type": "bar", "col": 12, "horizontal": true, "format": "ccompact"}
-    ]}
-  ]
+  "sections": [{"key": "kpi", "collapsible": false, "widgets": [
+    {"key": "sales", "type": "stat", "col": 4, "label": "Sales", "format": "currency",
+     "query": {"doctype": "Sales Invoice", "metrics": ["sum:base_grand_total"], "filters": {"docstatus": 1}},
+     "bind": {"period": "posting_date"}},
+    {"key": "top", "type": "bar", "col": 8, "title": "Top customers", "horizontal": true,
+     "query": {"doctype": "Sales Invoice", "metrics": ["sum:base_grand_total"], "group_by": ["customer"],
+               "filters": {"docstatus": 1}, "limit": 8},
+     "bind": {"period": "posting_date"}}
+  ]}]
 }
 ```
 
-Sections can hold child `sections`, up to 4 levels. Child sections are indented
-and collapse on their own. Tables and lists take `groupBy` as one key or a list of
-keys, for groups inside groups.
+A query takes `metrics` (`count`, `sum:<field>`, `avg:`, `min:`, `max:`), up to 3
+`group_by` fields, an optional `period` (`{"field": "posting_date", "by": "month"}`,
+by day, week, month, quarter or year), fixed `filters`, `order_by` and `limit`.
+It reads through Frappe's permission-checked `get_list`, so no SQL is involved.
 
-**Data Source: Script.** Pick one **Synapse Script**. It receives the resolved
-filters in `args["filters"]` and returns one dict keyed by widget key:
+Sections can hold child `sections`, up to 4 levels. Tables and lists take
+`groupBy` as one key or a list of keys, for groups inside groups.
 
-```python
-f = args["filters"]
-rows = query(
-    """select customer, sum(base_grand_total) as total from `tabSales Order`
-    where docstatus = 1 and transaction_date between %(a)s and %(b)s
-    group by customer order by total desc limit 10""",
-    {"a": f["period"][0], "b": f["period"][1]},
-)
-total = 0
-for r in rows:
-    total += r["total"]
-result = {"order_value": {"value": total}, "by_customer": rows}
-```
+**Script** dashboards pick one Synapse Script. It receives `args["filters"]` and
+assigns `result = {widget_key: value}`. Scripts can call
+`frappe.aggregate(doctype, metrics=..., group_by=..., period=..., filters=...)`,
+`frappe.get_list`, `frappe.get_count`, and `query(sql, values)` when SQL access is
+on. Frappe's safe exec applies: no imports, writes or network, and variables are
+not visible inside comprehensions, so use loops.
 
-A report returns rows, or `{"columns": [...], "result": rows}`.
-
-Scripts can use `frappe.get_list` and `frappe.get_count`, which keep Synapse
-grants and Frappe permissions, and `query(sql, values)` for bound read-only SQL
-(System Manager with SQL access). Scripts cannot import, write, call the network
-or run other scripts. Variables made in a script are not visible inside list or
-dict comprehensions, so build lists with loops.
-
-**Data Source: Assistant.** The data dict is stored on the page and written by a
-connected LLM with `publish_dashboard_snapshot`. Fill in **Brief for the
-Assistant** and **Refresh Every**. The assistant's notes show above the widgets.
-Filters do nothing on Assistant dashboards, and html widgets are not allowed.
+**Assistant** dashboards store the data dict on the page through
+`publish_dashboard_snapshot`. Fill in **Brief for the Assistant** and **Refresh
+Every**. The assistant's notes show above the widgets.
 
 Data never changes how a widget draws itself. Template, style and script keys in
 data are removed, and links must be site paths or http(s).
@@ -127,16 +127,18 @@ data are removed, and links must be site paths or http(s).
 
 | Tool | What it does |
 |---|---|
-| `get_dashboard_guide` | The full contract: layout, widgets, data shapes, filters, scripts, Assistant rules, an example |
+| `get_dashboard_guide` | Rules, which data source to pick, steps for "build" and "study my data", formats, an example, and what this user can do now |
+| `aggregate` | Count, sum, average, min or max over any DocType, grouped or by period. No SQL |
 | `list_dashboards` | Dashboards you can read, their data source, and which Assistant ones are due |
 | `get_dashboard` | One dashboard's layout, source, brief and current snapshot |
 | `preview_dashboard_data` | Runs a load as the browser does and lists widgets that got no data |
-| `save_dashboard` | Creates or changes a dashboard. Arguments left out keep their values |
+| `save_dashboard` | Creates or changes a dashboard in one call. Loads the data first and refuses to save if a widget fails |
 | `publish_dashboard_snapshot` | Stores new data and notes on an Assistant dashboard |
 
 The two write tools need the **Dashboard tools** switch in Synapse Settings and a
 profile with write on Synapse Page. They write only Synapse Pages, so the general
-write tools can stay off. Data Scripts are still created by a System Manager.
+write tools can stay off. Query dashboards need nothing else. Data Scripts are
+still created by a System Manager.
 
 ## Sharing
 

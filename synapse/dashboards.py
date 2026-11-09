@@ -168,6 +168,13 @@ def validate_layout(layout, view_type="Dashboard", assistant=False) -> dict:
 	filters = layout.get("filters") or []
 	if not isinstance(filters, list):
 		frappe.throw(_("Layout filters must be a list."))
+	if filters and assistant:
+		frappe.throw(
+			_(
+				"Assistant dashboards cannot have filters, because their data is stored, not run. "
+				"Use a Query dashboard for filters, or build one page per period or per company."
+			)
+		)
 	seen = set()
 	for i, f in enumerate(filters, start=1):
 		_clean_filter(f, i)
@@ -236,6 +243,15 @@ def _clean_widget(w, label, keys, assistant):
 	if isinstance(w.get("more"), dict):
 		w["more"]["href"] = safe_href(w["more"].get("href"))
 	_clean_group_by(f"Widget {key}", w.get("groupBy"))
+	if "query" in w or "bind" in w:
+		if assistant:
+			frappe.throw(
+				_("Widget {0}: Assistant dashboards store data, so widgets cannot have a query.").format(key)
+			)
+		if not isinstance(w.get("query"), dict):
+			frappe.throw(_("Widget {0}: query must be an object with at least a doctype.").format(key))
+		if not isinstance(w.get("bind") or {}, dict):
+			frappe.throw(_("Widget {0}: bind must map filter keys to fields.").format(key))
 	if w["type"] == "html":
 		_clean_html_widget(w, assistant)
 	elif "data" in w:
@@ -398,6 +414,7 @@ def config_for(doc) -> dict:
 	for f in layout.get("filters") or []:
 		if f["key"] in saved:
 			f["default"] = saved[f["key"]]
+	_strip_queries(layout)
 	config = {
 		"id": doc.name,
 		"title": doc.title,
@@ -425,6 +442,77 @@ def config_for(doc) -> dict:
 	return config
 
 
+def _strip_queries(layout):
+	layout.pop("query", None)
+	layout.pop("bind", None)
+	for w in _widgets(layout):
+		w.pop("query", None)
+		w.pop("bind", None)
+
+
+def _widgets(layout):
+	out = []
+
+	def walk(sections):
+		for s in sections or []:
+			out.extend(w for w in (s.get("widgets") or []) if isinstance(w, dict))
+			walk(s.get("sections"))
+
+	walk(layout.get("sections"))
+	return out
+
+
+def is_query(doc) -> bool:
+	return doc.get("data_mode") == "Query"
+
+
+def _query_targets(doc, layout):
+	"""(key, widget type, spec, bind) for every query on the page."""
+	if doc.get("view_type") == "Report":
+		return (
+			[("table", "table", layout.get("query"), layout.get("bind") or {})] if layout.get("query") else []
+		)
+	return [
+		(w["key"], w["type"], w["query"], w.get("bind") or {}) for w in _widgets(layout) if w.get("query")
+	]
+
+
+def _bound_filters(layout, bind, values):
+	"""Page filter values to field filters, for one widget."""
+	kinds = {f["key"]: f["type"] for f in layout.get("filters") or []}
+	out = {}
+	for key, field in bind.items():
+		v = values.get(key)
+		if v is None or v == "" or v == []:
+			continue
+		if kinds.get(key) == "daterange":
+			out[field] = ["between", v]
+		else:
+			out[field] = v
+	return out
+
+
+def _query_data(doc, filters=None):
+	from synapse import aggregate
+	from synapse.mcp_tools import settings
+	from synapse.mcp_tools.policy import READ, Denied, check
+
+	layout = layout_of(doc)
+	values = clean_filters(layout, filters)
+	data = {}
+	for key, kind, spec, bind in _query_targets(doc, layout):
+		try:
+			check(settings.get_policy(), READ, spec.get("doctype") or "")
+			compiled = aggregate.compile_spec(spec)
+			result = aggregate.run(compiled, _bound_filters(layout, bind, values))
+		except (aggregate.SpecError, Denied) as error:
+			frappe.throw(_("Widget {0}: {1}").format(key, error))
+		data[key] = aggregate.shape(kind, result["rows"], compiled)
+	if doc.get("view_type") == "Report":
+		return data.get("table", {"columns": [], "result": []})
+	return data
+
+
 def check_data(doc, data):
 	"""A dashboard's data is a dict keyed by widget key. A report's is a table payload."""
 	if doc.get("view_type") == "Report":
@@ -445,6 +533,8 @@ def check_data(doc, data):
 def data_for(doc, filters=None) -> dict | list:
 	if is_assistant(doc):
 		return sanitize(parse(doc.get("snapshot")) or {})
+	if is_query(doc):
+		return sanitize(_query_data(doc, filters))
 	if not doc.get("data_script"):
 		frappe.throw(_("This dashboard has no Data Script."))
 	from synapse.scripts import run_script
@@ -455,6 +545,29 @@ def data_for(doc, filters=None) -> dict | list:
 		frappe.throw(_("The Data Script returned too much data."))
 	check_data(doc, data)
 	return sanitize(data)
+
+
+def _check_queries(doc, layout):
+	from synapse import aggregate
+
+	targets = _query_targets(doc, layout)
+	if not targets:
+		frappe.throw(_("A Query dashboard needs at least one widget with a query."))
+	filter_keys = {f["key"] for f in layout.get("filters") or []}
+	for key, _kind, spec, bind in targets:
+		try:
+			compiled = aggregate.compile_spec(spec)
+		except aggregate.SpecError as error:
+			frappe.throw(_("Widget {0}: {1}").format(key, error))
+		for fkey, field in bind.items():
+			if fkey not in filter_keys:
+				frappe.throw(
+					_("Widget {0}: bind uses filter '{1}', which the page does not have.").format(key, fkey)
+				)
+			if field not in compiled["_known"]:
+				frappe.throw(
+					_("Widget {0}: bind field '{1}' is not on {2}.").format(key, field, compiled["doctype"])
+				)
 
 
 def validate_page(doc) -> None:
@@ -470,6 +583,12 @@ def validate_page(doc) -> None:
 		if doc.get("snapshot"):
 			data = parse(doc.snapshot, _("Snapshot"))
 			check_data(doc, data)
+	elif is_query(doc):
+		if doc.get("data_script"):
+			frappe.throw(_("Query dashboards run the queries in their Layout. Remove the Data Script."))
+		_check_queries(doc, layout)
+	elif any(w.get("query") for w in _widgets(layout)) or layout.get("query"):
+		frappe.throw(_("Widgets with a query need the Query data source."))
 	elif doc.get("data_script"):
 		script = frappe.get_doc("Synapse Script", doc.data_script)
 		script.check_permission("read")

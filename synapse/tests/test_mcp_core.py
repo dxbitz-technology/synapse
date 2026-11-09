@@ -96,7 +96,15 @@ class TestInitialize(unittest.TestCase):
 
 		self.assertLess(len(INSTRUCTIONS), 1200)
 		self.assertNotIn("\u2014", INSTRUCTIONS)
-		for tool in ("describe_doctype", "get_list", "get_count", "run_sql_query", "get_dashboard_guide"):
+		for tool in (
+			"describe_doctype",
+			"aggregate",
+			"get_list",
+			"get_count",
+			"run_sql_query",
+			"get_dashboard_guide",
+			"save_dashboard",
+		):
 			self.assertIn(tool, INSTRUCTIONS)
 
 

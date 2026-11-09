@@ -234,11 +234,33 @@
 		);
 	}
 
+	// ------------------------------------------------------------ data source tag
+	// Live: Query or Script, runs on every load and follows filters.
+	// Assistant: stored by the connected assistant, no filters.
+	function tagHeader(item, view) {
+		const head = view && view.el && view.el.querySelector(".bz-head-t h1");
+		if (!head || head.querySelector(".sy-tag")) return;
+		const assistant = item.data_mode === "Assistant";
+		head.append(
+			h(
+				"span",
+				{
+					class: "sy-tag bz-pill " + (assistant ? "bz-pill-blue" : "bz-pill-green"),
+					title: assistant
+						? "Kept up to date by the connected assistant. No filters."
+						: "Live data. Runs every time you open or filter it.",
+				},
+				assistant ? "Assistant" : "Live"
+			)
+		);
+	}
+
 	// ------------------------------------------------------------ start
 	const app = UI.app(root, {
 		title: "Synapse",
 		themeToggle: true,
 		emptyNav: "No dashboards yet",
+		onOpen: (item, view) => tagHeader(item, view),
 		footer: footer(),
 		items: async () => {
 			let list = [];

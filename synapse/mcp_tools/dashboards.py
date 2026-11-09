@@ -21,132 +21,169 @@ REFRESH = {"Hour": {"hours": 1}, "Day": {"days": 1}, "Week": {"weeks": 1}}
 MAX_NOTES = 20000
 
 GUIDE = {
-	"what": (
-		"A Synapse dashboard is a Synapse Page with a Layout in the Synapse UI format and one data source. "
-		"Users open it at /synapse#/<page>. The browser makes one data call per load and per filter change. "
-		"The data is ONE dict keyed by widget key. Each widget renders the value under its own key."
-	),
-	"workflow": [
-		"1. Call list_dashboards to see what exists. Reuse or change a dashboard before making a new one.",
-		"2. Inspect real DocType fields (describe tools) before writing any query. Never guess field names.",
-		"3. Script dashboard: a System Manager saves a Synapse Script (create_doc, needs config writes) that returns the data dict. Then save_dashboard with data_mode Script and data_script.",
-		"4. Assistant dashboard: save_dashboard with data_mode Assistant and a brief, gather numbers with the read tools, then publish_dashboard_snapshot with the data dict and short notes.",
-		"5. Call preview_dashboard_data (Script) and read the result before telling the user it works.",
-		"6. On a schedule, call list_dashboards(only_due=True) and refresh each Assistant dashboard that is due.",
+	"rules": [
+		"Never write Python files, server code or patches for a dashboard, and never ask the user to install anything. Everything is saved through these tools.",
+		"Build with data_source Query unless you have a reason not to. It needs no code, runs live, and filters work.",
+		"Do not guess. Check fields with describe_doctype and numbers with aggregate before you save.",
+		"save_dashboard checks the data before saving. If it fails, fix what the error names and call it again. Do not try other routes.",
+		"Answer the user in plain words: what the page shows, its link, and its limits. No JSON, no field names unless asked.",
 	],
+	"choose_data_source": {
+		"Query": "Default. Each widget has a query (DocType, metrics, grouping, time buckets). Live on every load, works with filters. Covers totals, counts, averages, trends, rankings and lists of top items.",
+		"Assistant": "For judgement a query cannot make: summaries, risks, picks, commentary. You store the data with publish_dashboard_snapshot and refresh it later. No filters, so build one page per period or company if the user needs several.",
+		"Script": "Only when Query cannot express it, for example ratios across two DocTypes in one figure. Needs a System Manager to save a Synapse Script and bench server scripts on. Prefer two Query widgets over one Script.",
+	},
+	"tell_the_user": {
+		"Query": "Live data, filters work, no upkeep.",
+		"Assistant": "Kept up to date by the assistant on a schedule, no filters, carries notes. Suggest separate pages for separate periods or companies.",
+		"Script": "Live data from a saved script, filters work.",
+	},
+	"steps_build": [
+		"1. list_dashboards: reuse or extend a page that already covers the request.",
+		"2. describe_doctype on the main DocType. Use real fieldnames.",
+		"3. aggregate to check the numbers look right (for example sum:base_grand_total by month).",
+		"4. save_dashboard once with the full layout. Read check in the reply. Every widget should have data.",
+		"5. Assistant only: publish_dashboard_snapshot with the data and 2 to 5 short notes.",
+		"6. Reply with the link and a one line description of each section.",
+	],
+	"steps_study_my_data": [
+		"1. list_available_doctypes, then get_count on the main transaction DocTypes of the module (Sales: Sales Invoice, Sales Order, Quotation, Customer).",
+		"2. aggregate by month and by the main party or item to see volume, trend and concentration.",
+		"3. Suggest 2 to 4 pages in plain words: what each shows, Query or Assistant, and why.",
+		"4. Build the ones the user picks. One page per topic is easier to read than one large page.",
+	],
+	"query": {
+		"shape": '{"doctype": "Sales Invoice", "metrics": ["sum:base_grand_total", "count"], "group_by": ["customer"], "period": {"field": "posting_date", "by": "month"}, "filters": {"docstatus": 1}, "order_by": "sum_base_grand_total desc", "limit": 10}',
+		"metrics": "count, sum:<field>, avg:<field>, min:<field>, max:<field>. Result columns are named count, sum_<field>, avg_<field> and so on.",
+		"group_by": "Up to 3 fields. The first one labels the chart or list.",
+		"period": "Buckets a Date or Datetime field by day, week, month, quarter or year. Result column is period.",
+		"filters": "Fixed conditions, same form as get_list. Add docstatus 1 for submitted documents. Use base_ amount fields for company currency.",
+		"bind": 'On the widget, maps page filters to fields: {"period": "posting_date", "customer": "customer"}. A daterange becomes a between filter. Empty filters are skipped.',
+		"what_each_widget_gets": "stat: the first metric summed, plus a sparkline when period is set. bar, line, area, donut, pie: the result rows, label column first. list: first group as title, first metric as value. table: all columns.",
+	},
 	"layout": {
-		"shape": {
-			"filters": "list of filter objects, optional",
-			"sections": "list of {key, title, description, collapsible, collapsed, widgets: [...], sections: [...]} (dashboard view). A section may hold widgets, child sections, or both. Child sections are indented under their parent and collapse on their own. Up to 4 levels.",
-			"table": "report view only: {columns, groupBy, totals, sortBy, sortDir, pageSize, search, export}",
-			"autoApply": "true (default) reloads on every filter change, false shows an Apply button",
-		},
-		"widget": "{key, type, col (1-12), colMd, title, subtitle, format, ...type options}. key is required and unique in the page.",
-		"grid": "12 columns. Stats usually col 3, a main chart col 8 beside a donut col 4, tables col 12. Narrow screens restack on their own.",
-		"nesting": "Use child sections to drill from a summary into detail, for example Sales > By customer > Overdue. Start detail levels collapsed (collapsed: true) so the page opens short. Keep the top level for the headline numbers.",
-		"forbidden": "No functions, method, fetch, render or actions in a layout. The server strips them.",
+		"shape": '{"filters": [...], "sections": [{"key", "title", "collapsed", "widgets": [...], "sections": [...]}]}. Sections nest up to 4 levels. A report uses {"filters", "query", "bind", "table": {"groupBy", "totals"}} with view Report.',
+		"widget": "{key, type, col (1-12), title, format, query, bind, ...options}. key is unique in the page.",
+		"types": "stat, bar, line, area, dot, pie, donut, split, list, table. html is for Script pages only.",
+		"good_page": "A row of 3 or 4 stats (col 3 or 4), a trend line (col 8) beside a donut or ranked bar (col 4), then a list or table. Put detail in a collapsed child section.",
+		"options": "stat: label, format, inverse (a rise is bad). bar: horizontal, stacked, values. line: area, smooth. donut: centerLabel. chart rows: labelKey, valueKeys, seriesNames {column: label}. list: limit, more {label, href}, groupBy. table: groupBy (list allowed), totals, sortBy.",
+		"formats": "currency (AED), currency:USD, ccompact (AED 1.2M), compact, int, number:0, percent (value already in %), date, text.",
 	},
-	"widgets": {
-		"stat": {
-			"options": "label, format, deltaFormat, inverse (true when a rise is bad), hint",
-			"data": "a number, or {value, delta, spark: [numbers], hint}",
-		},
-		"bar | line | area | dot | pie | donut | split": {
-			"options": "format, axisFormat, height, stacked, horizontal (bar, dot), smooth, area (line), values (bar labels), centerLabel (donut), labelKey, valueKeys, seriesNames, series, legend",
-			"data": [
-				"{label: number, ...} for one series",
-				"{labels: [...], values: [...]}",
-				"{labels: [...], series: {Name: [...], Other: [...]}}",
-				"[{month: 'Jan', sales: 10, cost: 6}, ...] SQL rows: first text column is the label, numeric columns are series",
-			],
-			"notes": "Keep to 8 series or fewer. pie and split fold the rest into Other.",
-		},
-		"list": {
-			"options": "size sm|lg, format, limit, empty, more: {label, href}, groupBy (a key, or a list of keys for groups inside groups), collapsed",
-			"data": "[{title, subtitle, value, format, meta, status, indicator, href}] where status is a word like Paid or Overdue, or {label, color}",
-		},
-		"table": {
-			"options": "columns, groupBy (a key, or a list of up to 4 keys: ['customer', 'status'] groups by customer then status, each level indented with its own subtotals), collapsed (true, false, or a level number: 1 keeps the first level open and closes deeper ones), totals, sortBy, sortDir, pageSize, search, export",
-			"data": "rows (list of dicts), or {columns, result}. Columns use Frappe style {fieldname, label, fieldtype, options}. Link columns link to the record.",
-		},
-		"html": {
-			"options": "template with {{field}} or {{field | format}}, css",
-			"data": "a dict for the template",
-			"notes": "Script dashboards only. The template is sanitised. Prefer the typed widgets.",
-		},
-		"value overrides": "Any widget value may be {data: ..., title: ..., ...}. The other keys override widget options for that load.",
-	},
-	"formats": "number, number:0, int, currency (AED), currency:USD, compact, ccompact, percent (value already in %), percent:0, date (DD-MM-YYYY), datetime, text, check",
 	"filters": {
-		"types": {
-			"select": "options: ['A','B'] or [{value,label}]. Sends a string, empty means All.",
-			"segment": "same options, drawn as buttons.",
-			"daterange": "default a preset (today, last_7, last_30, this_month, last_month, this_quarter, last_quarter, this_year, last_year) or two dates. Sends [from, to] as YYYY-MM-DD.",
-			"date": "sends YYYY-MM-DD.",
-			"link": "doctype: 'Customer'. Sends the record name.",
-			"check": "sends 0 or 1.",
-			"text | number": "sends the value.",
-		},
-		"common": "Every filter has key, label and default. Users can save their own filter values. Saved values become their defaults.",
-	},
-	"data_script": {
-		"receives": "args['filters'] with every filter key resolved (daterange already [from, to]). The same keys are also at the top level of args.",
-		"returns": "assign result = {widget_key: value, ...}. Keys that match no widget are refused. A report returns rows or {columns, result}.",
-		"helpers": "query(sql, values) for bound read-only SQL (System Manager with SQL access), frappe.get_list and frappe.get_count (keep Synapse grants and Frappe permissions), frappe.session.user.",
-		"limits": "No imports, writes or network. Variables made in the script are not visible inside list or dict comprehensions, so build lists with for loops. get_list order_by takes one field.",
-		"example": (
-			'f = args["filters"]\n'
-			'rows = query("""select customer, sum(base_grand_total) as total from `tabSales Order`\n'
-			"\twhere docstatus = 1 and transaction_date between %(a)s and %(b)s\n"
-			'\tgroup by customer order by total desc limit 10""", {"a": f["period"][0], "b": f["period"][1]})\n'
-			"total = 0\n"
-			"for r in rows:\n"
-			'\ttotal += r["total"]\n'
-			'result = {"order_value": {"value": total}, "by_customer": rows}'
-		),
+		"types": "daterange (default a preset: this_month, last_month, this_quarter, this_year, last_30 ...), select (options), link (doctype), date, check, text, number, segment.",
+		"rules": "Every filter has key, label, default. Bind each one on the widgets it should affect. Users can save their own values.",
 	},
 	"assistant": {
-		"what": "data_mode Assistant stores the data dict in Snapshot. Use it for reasoning heavy views: summaries, risks, picks, things a query cannot decide.",
-		"publish": "publish_dashboard_snapshot(page, data, notes). data uses the same keys and shapes as a script would return. Notes are 2 to 5 short plain sentences shown above the widgets: what changed, why it matters, what to do.",
-		"layout": "You may change the layout with save_dashboard whenever the story needs a different view. html widgets are not allowed here.",
-		"filters": "Filters do nothing on Assistant dashboards. Put the period in the notes or titles instead.",
+		"publish": "publish_dashboard_snapshot(page, data, notes). data is a dict keyed by widget key in the shapes listed under what_each_widget_gets. Build it from aggregate results.",
+		"notes": "2 to 5 short plain sentences: what changed, why it matters, what to do.",
+		"refresh": "Later, list_dashboards(only_due=True) shows pages to refresh. Read each brief and publish again.",
 	},
-	"example_layout": {
-		"filters": [
-			{"key": "period", "label": "Period", "type": "daterange", "default": "this_year"},
-			{"key": "customer", "label": "Customer", "type": "link", "doctype": "Customer"},
-		],
-		"sections": [
-			{
-				"key": "kpi",
-				"collapsible": False,
-				"widgets": [
-					{
-						"key": "order_value",
-						"type": "stat",
-						"col": 4,
-						"label": "Order value",
-						"format": "currency",
-					},
-				],
-			},
-			{
-				"key": "customers",
-				"title": "Customers",
-				"widgets": [
-					{
-						"key": "by_customer",
-						"type": "bar",
-						"col": 12,
-						"title": "Top customers",
-						"horizontal": True,
-						"format": "ccompact",
-					},
-				],
-			},
-		],
+	"script": {
+		"receives": "args['filters'] with resolved values (daterange is [from, to]).",
+		"returns": "result = {widget_key: value}. Same shapes as Query widgets get.",
+		"helpers": "frappe.aggregate(doctype, metrics=..., group_by=..., period=..., filters=...) returns rows. frappe.get_list and frappe.get_count. query(sql, values) only when SQL access is on.",
+		"limits": "Frappe safe exec: no imports, no writes, no network, no other scripts. Variables are not visible inside list or dict comprehensions, use for loops. get_list order_by takes one field.",
 	},
-	"style": "Plain short titles, AED amounts with format currency or ccompact, dates shown DD-MM-YYYY by the kit.",
+	"example": {
+		"call": "save_dashboard",
+		"page": "sales-overview",
+		"title": "Sales Overview",
+		"data_source": "Query",
+		"layout": {
+			"filters": [
+				{"key": "period", "label": "Period", "type": "daterange", "default": "this_year"},
+				{"key": "customer", "label": "Customer", "type": "link", "doctype": "Customer"},
+			],
+			"sections": [
+				{
+					"key": "kpi",
+					"collapsible": False,
+					"widgets": [
+						{
+							"key": "sales",
+							"type": "stat",
+							"col": 4,
+							"label": "Sales",
+							"format": "currency",
+							"query": {
+								"doctype": "Sales Invoice",
+								"metrics": ["sum:base_grand_total"],
+								"period": {"field": "posting_date", "by": "month"},
+								"filters": {"docstatus": 1},
+							},
+							"bind": {"period": "posting_date", "customer": "customer"},
+						},
+						{
+							"key": "due",
+							"type": "stat",
+							"col": 4,
+							"label": "Outstanding",
+							"format": "currency",
+							"inverse": True,
+							"query": {
+								"doctype": "Sales Invoice",
+								"metrics": ["sum:outstanding_amount"],
+								"filters": {"docstatus": 1},
+							},
+							"bind": {"customer": "customer"},
+						},
+						{
+							"key": "invoices",
+							"type": "stat",
+							"col": 4,
+							"label": "Invoices",
+							"format": "int",
+							"query": {
+								"doctype": "Sales Invoice",
+								"metrics": ["count"],
+								"filters": {"docstatus": 1},
+							},
+							"bind": {"period": "posting_date", "customer": "customer"},
+						},
+					],
+				},
+				{
+					"key": "trend",
+					"title": "Trend",
+					"widgets": [
+						{
+							"key": "monthly",
+							"type": "line",
+							"col": 8,
+							"title": "Sales by month",
+							"format": "ccompact",
+							"area": True,
+							"seriesNames": {"sum_base_grand_total": "Sales"},
+							"query": {
+								"doctype": "Sales Invoice",
+								"metrics": ["sum:base_grand_total"],
+								"period": {"field": "posting_date", "by": "month"},
+								"filters": {"docstatus": 1},
+							},
+							"bind": {"period": "posting_date", "customer": "customer"},
+						},
+						{
+							"key": "top",
+							"type": "bar",
+							"col": 4,
+							"title": "Top customers",
+							"horizontal": True,
+							"format": "ccompact",
+							"seriesNames": {"sum_base_grand_total": "Sales"},
+							"query": {
+								"doctype": "Sales Invoice",
+								"metrics": ["sum:base_grand_total"],
+								"group_by": ["customer"],
+								"filters": {"docstatus": 1},
+								"limit": 8,
+							},
+							"bind": {"period": "posting_date"},
+						},
+					],
+				},
+			],
+		},
+	},
 }
 
 
@@ -176,14 +213,48 @@ def _due(row) -> bool:
 )
 @audit.audited(audit.READ)
 def get_dashboard_guide():
-	"""Read this first before you build, change or refresh any Synapse dashboard.
+	"""Read this first, before building, changing or refreshing any Synapse dashboard, and before suggesting one.
 
-	Returns the layout format, every widget type with the data shape it takes,
-	filter types and what a Data Script receives, the Assistant snapshot rules,
-	and a worked example."""
+	Returns the rules, how to choose between Query, Assistant and Script, the steps
+	for "build me a dashboard" and "study my data", the query and layout formats,
+	a complete example, and what you can do on this site right now."""
 
 	check(settings.get_policy(), READ, PAGE)
-	return GUIDE
+	return {"your_access": _access(), **GUIDE}
+
+
+def _access() -> dict:
+	"""What this user can do now, and what to tell them when something is missing."""
+	import frappe
+	from frappe.utils.safe_exec import is_safe_exec_enabled
+
+	policy = settings.get_policy()
+	can_save = settings.dashboard_tools_enabled()
+	scripts_on = is_safe_exec_enabled()
+	can_write_scripts = (
+		policy.write_enabled
+		and "System Manager" in frappe.get_roles()
+		and "write" in policy.granted_actions("Synapse Script")
+		and "write" not in policy.blocked_actions("Synapse Script")
+	)
+	out = {
+		"save_dashboards": can_save,
+		"query_dashboards": can_save,
+		"assistant_dashboards": can_save,
+		"script_dashboards": can_save and scripts_on and can_write_scripts,
+		"sql": settings.sql_tool_enabled(),
+	}
+	if not can_save:
+		out["tell_the_user"] = (
+			"I can read your data but cannot save dashboards yet. A System Manager needs to turn on "
+			"Dashboard tools in Synapse Settings and give your Synapse Profile write access to Synapse Page."
+		)
+		out["do_not"] = "Do not create the Synapse Page with create_doc instead. Wait for the switch."
+	elif not out["script_dashboards"]:
+		out["note"] = (
+			"Use Query or Assistant. Script dashboards are not available to you here, and you do not need them."
+		)
+	return out
 
 
 @mcp.tool(
@@ -335,17 +406,21 @@ def save_dashboard(
 	enabled: bool | None = None,
 	validate_only: bool = False,
 ):
-	"""Create a dashboard, or replace the definition of an existing one. Read get_dashboard_guide first.
+	"""Create a dashboard, or replace one, in a single call. Read get_dashboard_guide first.
 
-	The layout is checked before anything is saved. On an existing dashboard, any
-	argument you leave out keeps its current value. Existing Assistant data is kept
-	unless a widget it belongs to is removed, in which case publish a new snapshot.
+	Query and Script dashboards load their data once before saving. If any widget
+	fails, nothing is saved and the error names the widget. On success the reply
+	shows what each widget got, so you can report back without another call.
+	On an existing dashboard, any argument you leave out keeps its current value.
 
 	Args:
 	        page: Lowercase slug, for example sales-overview. Used in /synapse#/<page>.
 	        layout: The Synapse UI layout object (filters, sections or table).
 	        title: Display title. Required for a new dashboard.
-	        data_source: Script or Assistant. New dashboards default to Script.
+	        data_source: Query (widgets carry their own query, live, filters work, no code),
+	                Script (one Synapse Script returns all data) or Assistant (you store the
+	                data with publish_dashboard_snapshot, no filters). New dashboards default
+	                to Query when a widget has a query, else Script when data_script is set.
 	        data_script: Synapse Script name, required for Script dashboards.
 	        view: Dashboard or Report. New dashboards default to Dashboard.
 	        group: Sidebar group, for example Sales.
@@ -361,14 +436,18 @@ def save_dashboard(
 	audit.current().target(PAGE, page)
 	exists = frappe.db.exists(PAGE, page)
 	doc = frappe.get_doc(PAGE, page) if exists else frappe.new_doc(PAGE)
-	data_source = data_source or doc.get("data_mode") or "Script"
+	if not data_source:
+		has_query = isinstance(layout, dict) and (
+			layout.get("query") or any(w.get("query") for w in dash._widgets(layout))
+		)
+		data_source = doc.get("data_mode") if exists else ("Query" if has_query else "Script")
 	view = view or doc.get("view_type") or "Dashboard"
 	if data_source == "Script" and data_script is None:
 		data_script = doc.get("data_script")
 	if enabled is None:
 		enabled = bool(doc.enabled) if exists else True
-	if data_source not in ("Script", "Assistant"):
-		frappe.throw("data_source must be Script or Assistant.")
+	if data_source not in ("Query", "Script", "Assistant"):
+		frappe.throw("data_source must be Query, Script or Assistant.")
 	if view not in ("Dashboard", "Report"):
 		frappe.throw("view must be Dashboard or Report.")
 	if refresh_every and refresh_every not in ("Hour", "Day", "Week", "On Request"):
@@ -403,18 +482,55 @@ def save_dashboard(
 			values["snapshot"] = json.dumps({k: v for k, v in snapshot.items() if k in keys})
 	doc.update(values)
 
+	doc.run_method("validate")
+	loaded = _first_load(doc)
 	if validate_only:
-		doc.run_method("validate")
-		return {"valid": True, "page": page, "widget_keys": dash.widget_keys(dash.layout_of(doc))}
+		return {"valid": True, "page": page, "saved": False, "check": loaded}
 
 	doc.save()
 	audit.current().rows(1)
 	return {
 		"page": doc.name,
 		"created": not exists,
-		"widget_keys": dash.widget_keys(dash.layout_of(doc)),
+		"data_source": doc.data_mode,
 		"url": frappe.utils.get_url(f"/synapse#/{doc.name}"),
+		"check": loaded,
+		"next": (
+			"Publish data with publish_dashboard_snapshot before telling the user it is ready."
+			if dash.is_assistant(doc)
+			else "Tell the user the link. Filters work in the app."
+		),
 	}
+
+
+def _first_load(doc):
+	"""Load the data the way the browser will. A failure stops the save."""
+	if dash.is_assistant(doc):
+		return {"note": "Assistant dashboard. It shows nothing until you publish a snapshot."}
+	try:
+		data = dash.data_for(doc, {})
+	except Exception as error:
+		hint = ""
+		if not dash.is_query(doc) and "server script" in str(error).lower():
+			hint = " Server scripts are off on this bench. Use data_source Query instead, it needs no script."
+		frappe.throw(f"Not saved. The first data load failed: {error}.{hint}")
+	if doc.view_type == "Report":
+		rows = (data.get("result") if isinstance(data, dict) else data) or []
+		return {"rows": len(rows)}
+	summary = {}
+	for key in dash.widget_keys(dash.layout_of(doc)):
+		value = data.get(key) if isinstance(data, dict) else None
+		if value is None:
+			summary[key] = "no data"
+		elif isinstance(value, dict) and "value" in value:
+			summary[key] = value["value"]
+		elif isinstance(value, dict) and "result" in value:
+			summary[key] = f"{len(value['result'])} rows"
+		elif isinstance(value, (list, dict)):
+			summary[key] = f"{len(value)} rows"
+		else:
+			summary[key] = value
+	return {"widgets": summary}
 
 
 @mcp.tool(

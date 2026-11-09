@@ -36,3 +36,5 @@ body { display: block; }
 .sy-toast { position: fixed; right: 16px; bottom: 16px; z-index: 100; max-width: min(360px, calc(100vw - 32px)); padding: 10px 14px; border-radius: var(--bz-radius); background: var(--bz-text); color: var(--bz-page); font: 13px/1.4 var(--bz-font); box-shadow: 0 6px 20px rgba(0, 0, 0, .18); transition: opacity .3s, transform .3s; }
 .sy-toast-error { background: #c92a2a; color: #fff; }
 .sy-toast-out { opacity: 0; transform: translateY(6px); }
+
+.sy-tag { margin-left: 10px; vertical-align: 3px; font-size: 11px; cursor: help; }

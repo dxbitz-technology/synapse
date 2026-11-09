@@ -155,6 +155,48 @@ class TestNesting(Base):
 			dash.validate_layout(widget)
 
 
+class TestDataSourceRules(Base):
+	def test_assistant_pages_refuse_filters_and_queries(self):
+		with_filter = layout(filters=[{"key": "p", "type": "daterange"}])
+		with self.assertRaises(frappe.ValidationError):
+			dash.validate_layout(with_filter, assistant=True)
+		with_query = {"sections": [{"widgets": [{"key": "s", "type": "stat", "query": {"doctype": "X"}}]}]}
+		with self.assertRaises(frappe.ValidationError):
+			dash.validate_layout(with_query, assistant=True)
+
+	def test_query_and_bind_must_be_objects(self):
+		for w in ({"query": "Sales Invoice"}, {"query": {"doctype": "X"}, "bind": ["period"]}):
+			value = {"sections": [{"widgets": [{"key": "s", "type": "stat", **w}]}]}
+			with self.subTest(w), self.assertRaises(frappe.ValidationError):
+				dash.validate_layout(value)
+
+	def test_bound_filters_turn_into_field_conditions(self):
+		lay = {
+			"filters": [
+				{"key": "period", "type": "daterange"},
+				{"key": "c", "type": "link"},
+				{"key": "x", "type": "text"},
+			]
+		}
+		out = dash._bound_filters(
+			lay,
+			{"period": "posting_date", "c": "customer", "x": "remarks"},
+			{"period": ["2026-01-01", "2026-01-31"], "c": "A", "x": ""},
+		)
+		self.assertEqual(out, {"posting_date": ["between", ["2026-01-01", "2026-01-31"]], "customer": "A"})
+
+	def test_queries_never_reach_the_browser(self):
+		lay = {
+			"query": {"doctype": "X"},
+			"sections": [
+				{"widgets": [{"key": "s", "type": "stat", "query": {"doctype": "X"}, "bind": {"a": "b"}}]}
+			],
+		}
+		dash._strip_queries(lay)
+		self.assertNotIn("query", lay)
+		self.assertEqual(lay["sections"][0]["widgets"][0], {"key": "s", "type": "stat"})
+
+
 class TestFilters(Base):
 	def test_presets_resolve_like_the_browser(self):
 		today = date(2026, 11, 9)

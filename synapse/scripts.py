@@ -47,6 +47,27 @@ def query(sql, values=None):
 	return serialise.to_client(rows)
 
 
+def _aggregate(doctype, metrics=None, group_by=None, period=None, filters=None, order_by=None, limit=None):
+	"""frappe.aggregate in scripts: the same engine as the aggregate MCP tool, rows only."""
+	from synapse import aggregate as engine
+	from synapse.mcp_tools.policy import READ, check
+
+	check(settings.get_policy(), READ, doctype)
+	spec = {
+		"doctype": doctype,
+		"metrics": metrics,
+		"group_by": group_by,
+		"period": period,
+		"filters": filters,
+		"order_by": order_by,
+		"limit": limit,
+	}
+	try:
+		return engine.run(engine.compile_spec(spec))["rows"]
+	except engine.SpecError as error:
+		frappe.throw(str(error))
+
+
 def execute_script(name, args=None):
 	doc = frappe.get_doc("Synapse Script", name)
 	doc.check_permission("read")
@@ -57,6 +78,7 @@ def execute_script(name, args=None):
 	namespace = NamespaceDict(
 		get_list=lambda doctype, **kw: documents.get_list.__wrapped__(doctype=doctype, **kw)["rows"],
 		get_count=lambda doctype, **kw: documents.get_count.__wrapped__(doctype=doctype, **kw)["count"],
+		aggregate=lambda doctype, **kw: _aggregate(doctype, **kw),
 		db=NamespaceDict(sql=query),
 		session=NamespaceDict(user=frappe.session.user),
 	)
