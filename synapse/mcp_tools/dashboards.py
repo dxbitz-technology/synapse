@@ -25,6 +25,7 @@ GUIDE = {
 		"Never write Python files, server code or patches for a dashboard, and never ask the user to install anything. Everything is saved through these tools.",
 		"Build with data_source Query unless you have a reason not to. It needs no code, runs live, and filters work.",
 		"Do not guess. Check fields with describe_doctype and numbers with aggregate before you save.",
+		"Filters on ERP records (customer, item, sales person and so on) are always link filters with a doctype, never free text.",
 		"save_dashboard checks the data before saving. If it fails, fix what the error names and call it again. Do not try other routes.",
 		"Answer the user in plain words: what the page shows, its link, and its limits. No JSON, no field names unless asked.",
 	],
@@ -57,8 +58,8 @@ GUIDE = {
 		"metrics": "count, sum:<field>, avg:<field>, min:<field>, max:<field>. Result columns are named count, sum_<field>, avg_<field> and so on.",
 		"group_by": "Up to 3 fields. The first one labels the chart or list.",
 		"period": "Buckets a Date or Datetime field by day, week, month, quarter or year. Result column is period.",
-		"filters": "Fixed conditions, same form as get_list. Add docstatus 1 for submitted documents. Use base_ amount fields for company currency.",
-		"bind": 'On the widget, maps page filters to fields: {"period": "posting_date", "customer": "customer"}. A daterange becomes a between filter. Empty filters are skipped.',
+		"filters": "Fixed conditions, same form as get_list. Add docstatus 1 for submitted documents. Use base_ amount fields for company currency. Invoice totals net out returns and credit notes. Add is_return 0 when the user means gross sales, and say which one the widget shows.",
+		"bind": 'On the widget, maps page filters to fields: {"period": "posting_date", "customer": "customer"}. A daterange becomes a between filter. Empty filters are skipped. For a field in a child table use "Child DocType.field", for example {"sales_person": "Sales Team.sales_person"} on Sales Invoice.',
 		"what_each_widget_gets": "stat: the first metric summed, plus a sparkline when period is set. bar, line, area, donut, pie: the result rows, label column first. list: first group as title, first metric as value. table: all columns.",
 	},
 	"layout": {
@@ -72,6 +73,7 @@ GUIDE = {
 	"filters": {
 		"types": "daterange (default a preset: this_month, last_month, this_quarter, this_year, last_30 ...), select (options), link (doctype), date, check, text, number, segment.",
 		"rules": "Every filter has key, label, default. Bind each one on the widgets it should affect. Users can save their own values.",
+		"erp_records": "A filter on ERP records (customer, item, sales person, territory, company, project...) must be type link with its doctype, so users pick from a searchable list. Never use text for these. Choices from a Select field use type select. Synapse also turns a text filter into a link or select when it is bound to a Link or Select field, or named after a DocType.",
 	},
 	"assistant": {
 		"publish": "publish_dashboard_snapshot(page, data, notes). data is a dict keyed by widget key in the shapes listed under what_each_widget_gets. Build it from aggregate results.",

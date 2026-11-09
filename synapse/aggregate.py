@@ -191,6 +191,46 @@ def shape(widget_type, rows, spec):
 # ---------------------------------------------------------------- Frappe parts
 
 
+def field_of(doctype, name):
+	"""The docfield behind a filter or bind name, or None.
+
+	A plain name is a field on the DocType. "Sales Team.sales_person" (child
+	DocType or table fieldname, then field) is a field in one of its child tables.
+	Returns (fieldtype, options, child_doctype or None).
+	"""
+	import frappe
+
+	meta = frappe.get_meta(doctype)
+	if "." not in str(name):
+		df = meta.get_field(name)
+		return (df.fieldtype, df.options, None) if df else None
+	table, _, field = str(name).partition(".")
+	for tf in meta.get_table_fields():
+		if table in (tf.options, tf.fieldname):
+			df = frappe.get_meta(tf.options).get_field(field)
+			return (df.fieldtype, df.options, tf.options) if df else None
+	return None
+
+
+def _filter_rows(doctype, filters):
+	"""Dict filters, with child table fields allowed, to Frappe's list form."""
+	rows = []
+	for key, value in (filters or {}).items():
+		op, val = ("=", value)
+		if isinstance(value, (list, tuple)) and len(value) == 2 and isinstance(value[0], str):
+			op, val = value[0], value[1]
+		if "." in str(key):
+			info = field_of(doctype, key)
+			if not info or not info[2]:
+				raise SpecError(
+					f"'{key}' is not a child table field of {doctype}. Use 'Child DocType.field'."
+				)
+			rows.append([info[2], key.partition(".")[2], op, val])
+		else:
+			rows.append([doctype, key, op, val])
+	return rows
+
+
 def compile_spec(spec):
 	"""Check a spec against the DocType's real fields. Returns it with private keys added."""
 	import frappe
@@ -254,7 +294,7 @@ def compile_spec(spec):
 	if not isinstance(filters, dict):
 		raise SpecError("filters must be an object of field names to values.")
 	for f in filters:
-		if f not in known:
+		if f not in known and not ("." in f and field_of(doctype, f)):
 			raise SpecError(f"Filter field '{f}' is not a field on {doctype}.")
 
 	out = dict(spec)
@@ -290,9 +330,10 @@ def run(spec, extra_filters=None, limit=None):
 
 	filters = dict(spec.get("filters") or {})
 	for k, v in (extra_filters or {}).items():
-		if k not in spec["_known"]:
+		if k not in spec["_known"] and "." not in k:
 			raise SpecError(f"Filter field '{k}' is not a field on {doctype}.")
 		filters[k] = v
+	filters = _filter_rows(doctype, filters)
 
 	raw = frappe.get_list(
 		doctype,

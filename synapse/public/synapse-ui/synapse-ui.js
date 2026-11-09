@@ -745,16 +745,18 @@
         const id = 'bz-dl-' + f.key;
         const dl = h('datalist', { id });
         let t;
+        // suggestions load on focus (empty search) and while typing
+        const suggest = (txt, wait) => {
+          clearTimeout(t);
+          t = setTimeout(async () => {
+            const res = f.search ? await f.search(txt) : f.doctype ? await call('frappe.desk.search.search_link', { doctype: f.doctype, txt, page_length: 20 }).catch(() => []) : [];
+            dl.replaceChildren(...(res || []).map(r => h('option', { value: r.value || r }, r.description && r.description !== r.value ? r.description : null)));
+          }, wait);
+        };
         input = h('span', null, h('input', {
-          class: 'bz-input', list: id, value: val || '', placeholder: f.placeholder || lbl,
-          oninput: e => {
-            clearTimeout(t);
-            t = setTimeout(async () => {
-              const txt = e.target.value;
-              const res = f.search ? await f.search(txt) : f.doctype ? await call('frappe.desk.search.search_link', { doctype: f.doctype, txt, page_length: 10 }).catch(() => []) : [];
-              dl.replaceChildren(...(res || []).map(r => h('option', { value: r.value || r })));
-            }, 250);
-          },
+          class: 'bz-input', list: id, value: val || '', placeholder: f.placeholder || 'Search ' + lbl, autocomplete: 'off',
+          onfocus: e => suggest(e.target.value, 0),
+          oninput: e => suggest(e.target.value, 250),
           onchange: e => onChange(e.target.value)
         }), dl);
         break;

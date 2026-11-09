@@ -185,6 +185,23 @@ class TestDataSourceRules(Base):
 		)
 		self.assertEqual(out, {"posting_date": ["between", ["2026-01-01", "2026-01-31"]], "customer": "A"})
 
+	def test_text_filters_bound_to_erp_fields_become_pickers(self):
+		lay = {
+			"filters": [
+				{"key": "sp", "type": "text"},
+				{"key": "st", "type": "text"},
+				{"key": "keep", "type": "date"},
+			]
+		}
+		dash._upgrade_filter(lay, "sp", ("Link", "Sales Person", "Sales Team"))
+		dash._upgrade_filter(lay, "st", ("Select", "Draft\nPaid\n\nOverdue", None))
+		dash._upgrade_filter(lay, "keep", ("Link", "Customer", None))
+		self.assertEqual(lay["filters"][0], {"key": "sp", "type": "link", "doctype": "Sales Person"})
+		self.assertEqual(
+			lay["filters"][1], {"key": "st", "type": "select", "options": ["Draft", "Paid", "Overdue"]}
+		)
+		self.assertEqual(lay["filters"][2], {"key": "keep", "type": "date"})
+
 	def test_queries_never_reach_the_browser(self):
 		lay = {
 			"query": {"doctype": "X"},

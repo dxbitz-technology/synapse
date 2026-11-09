@@ -564,10 +564,45 @@ def _check_queries(doc, layout):
 				frappe.throw(
 					_("Widget {0}: bind uses filter '{1}', which the page does not have.").format(key, fkey)
 				)
-			if field not in compiled["_known"]:
+			info = aggregate.field_of(compiled["doctype"], field)
+			if field not in compiled["_known"] and not info:
 				frappe.throw(
-					_("Widget {0}: bind field '{1}' is not on {2}.").format(key, field, compiled["doctype"])
+					_(
+						"Widget {0}: bind field '{1}' is not on {2}. For a child table field use 'Child DocType.field'."
+					).format(key, field, compiled["doctype"])
 				)
+			if info:
+				_upgrade_filter(layout, fkey, info)
+
+
+def _upgrade_filter(layout, key, info):
+	"""A free text filter bound to an ERP record or choice becomes a picker."""
+	fieldtype, options, _child = info
+	for f in layout.get("filters") or []:
+		if f["key"] != key or f["type"] not in ("text",):
+			continue
+		if fieldtype == "Link" and options:
+			f["type"], f["doctype"] = "link", options
+		elif fieldtype == "Select" and options:
+			choices = [o for o in str(options).splitlines() if o.strip()]
+			if choices:
+				f["type"], f["options"] = "select", choices
+
+
+def _link_named_filters(layout):
+	"""A text filter named after a DocType (Sales Person, customer) becomes a link filter."""
+	for f in layout.get("filters") or []:
+		if f["type"] != "text":
+			continue
+		for name in (f.get("label"), str(f["key"]).replace("_", " ").title()):
+			if not name:
+				continue
+			row = frappe.db.get_value(
+				"DocType", {"name": name}, ["name", "istable", "issingle"], as_dict=True
+			)
+			if row and not row.istable and not row.issingle:
+				f["type"], f["doctype"] = "link", row.name
+				break
 
 
 def validate_page(doc) -> None:
@@ -576,6 +611,9 @@ def validate_page(doc) -> None:
 		return
 	assistant = is_assistant(doc)
 	layout = validate_layout(doc.layout, doc.get("view_type") or "Dashboard", assistant)
+	_link_named_filters(layout)
+	if is_query(doc) and not assistant:
+		_check_queries(doc, layout)
 	doc.layout = json.dumps(layout, indent=1)
 	if assistant:
 		if doc.get("data_script"):
@@ -586,7 +624,6 @@ def validate_page(doc) -> None:
 	elif is_query(doc):
 		if doc.get("data_script"):
 			frappe.throw(_("Query dashboards run the queries in their Layout. Remove the Data Script."))
-		_check_queries(doc, layout)
 	elif any(w.get("query") for w in _widgets(layout)) or layout.get("query"):
 		frappe.throw(_("Widgets with a query need the Query data source."))
 	elif doc.get("data_script"):
