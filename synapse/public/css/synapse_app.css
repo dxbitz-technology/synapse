@@ -24,6 +24,14 @@ body { display: block; }
 
 .sy-empty { margin: 48px auto; max-width: 420px; }
 .sy-error { color: #c92a2a; }
+.sy-start { max-width: 460px; margin: 12vh auto 0; padding: 0 16px; color: var(--bz-text); font: 13px/1.55 var(--bz-font); }
+.sy-start h2 { margin: 0 0 8px; font-size: 18px; font-weight: 600; }
+.sy-start p { margin: 0 0 12px; color: var(--bz-muted); }
+.sy-start ol { margin: 0 0 18px; padding-left: 20px; color: var(--bz-text); }
+.sy-start li { margin: 4px 0; }
+.sy-start-a { display: flex; }
+.sy-start-btn { margin: 0; }
+.sy-start-btn .sy-link-ico { opacity: 1; }
 
 .sy-toast { position: fixed; right: 16px; bottom: 16px; z-index: 100; max-width: min(360px, calc(100vw - 32px)); padding: 10px 14px; border-radius: var(--bz-radius); background: var(--bz-text); color: var(--bz-page); font: 13px/1.4 var(--bz-font); box-shadow: 0 6px 20px rgba(0, 0, 0, .18); transition: opacity .3s, transform .3s; }
 .sy-toast-error { background: #c92a2a; color: #fff; }

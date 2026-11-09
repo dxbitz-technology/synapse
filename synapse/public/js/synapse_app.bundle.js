@@ -155,21 +155,42 @@
 		}
 	}
 
-	function mcpButton() {
+	async function copyMcpLink() {
+		const ok = await copyText(boot.mcp_endpoint);
+		notice(ok ? "MCP link copied. Paste it into your MCP client as a remote server." : boot.mcp_endpoint, ok ? null : "error");
+	}
+
+	function mcpButton(extraClass) {
 		if (!boot.mcp_endpoint) return null;
 		return h(
 			"button",
-			{
-				type: "button",
-				class: "bz-btn sy-mcp-btn",
-				title: boot.mcp_endpoint,
-				onclick: async () => {
-					const ok = await copyText(boot.mcp_endpoint);
-					notice(ok ? "MCP link copied. Paste it into your MCP client as a remote server." : boot.mcp_endpoint, ok ? null : "error");
-				},
-			},
+			{ type: "button", class: "bz-btn sy-mcp-btn" + (extraClass ? " " + extraClass : ""), title: boot.mcp_endpoint, onclick: copyMcpLink },
 			h("span", { class: "sy-link-ico", "aria-hidden": "true" }),
 			"Copy MCP link"
+		);
+	}
+
+	// Shown when the user has no dashboards. Covered users can connect an assistant to build one.
+	function emptyState() {
+		if (!boot.mcp_endpoint) {
+			return h(
+				"div",
+				{ class: "sy-start" },
+				h("h2", null, "No dashboards yet"),
+				h("p", null, "Ask an admin to create one or share one with you.")
+			);
+		}
+		return h(
+			"div",
+			{ class: "sy-start" },
+			h("h2", null, "Connect an assistant to build your first dashboard"),
+			h("p", null, "Add Synapse to your MCP client as a remote server. Then ask it for the dashboard you need. It appears here as soon as it is saved."),
+			h("ol", null,
+				h("li", null, "Copy the MCP link."),
+				h("li", null, "Add it to your MCP client and sign in when asked."),
+				h("li", null, "Ask, for example: \"Build a sales dashboard by customer for this year.\"")
+			),
+			h("div", { class: "sy-start-a" }, mcpButton("bz-btn-primary sy-start-btn"))
 		);
 	}
 
@@ -217,6 +238,7 @@
 	const app = UI.app(root, {
 		title: "Synapse",
 		themeToggle: true,
+		emptyNav: "No dashboards yet",
 		footer: footer(),
 		items: async () => {
 			let list = [];
@@ -227,10 +249,13 @@
 				failed = e;
 			}
 			if (!list.length) {
-				const text = failed
-					? "Could not load dashboards: " + (failed.message || failed) + ". Refresh to try again."
-					: "No dashboards yet. Ask an admin to create one or share one with you.";
-				setTimeout(() => app.message(h("div", { class: "bz-empty sy-empty" + (failed ? " sy-error" : "") }, text)));
+				setTimeout(() =>
+					app.message(
+						failed
+							? h("div", { class: "bz-empty sy-empty sy-error" }, "Could not load dashboards: " + (failed.message || failed) + ". Refresh to try again.")
+							: emptyState()
+					)
+				);
 			}
 			return list.map((m) => Object.assign({}, m, { load: async (it) => buildConfig(await call("get_dashboard", { name: it.id })) }));
 		},

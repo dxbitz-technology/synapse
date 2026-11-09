@@ -972,7 +972,7 @@
       nav.replaceChildren(...(hit.length ? groups(hit, it => it.group).flatMap(g => [
         g.key === '(Not set)' ? null : h('div', { class: 'bz-nav-g' }, g.key),
         ...g.rows.map(it => h('a', { class: 'bz-nav-i' + (cur && cur.id === it.id ? ' on' : ''), href: '#/' + it.id, title: it.description || it.title },
-          icon(it.type === 'report' ? 'table' : 'chart'), h('span', null, it.title)))]).filter(Boolean) : [h('div', { class: 'bz-empty', text: 'No matches' })]));
+          icon(it.type === 'report' ? 'table' : 'chart'), h('span', null, it.title)))]).filter(Boolean) : [h('div', { class: 'bz-empty', text: items.length ? 'No matches' : o.emptyNav || 'Nothing here yet' })]));
     }
     async function open(id) {
       const it = items.find(x => x.id === id) || items.find(x => x.id === o.home) || items[0];
