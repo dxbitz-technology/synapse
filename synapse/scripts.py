@@ -8,6 +8,7 @@ from frappe.utils.safe_exec import NamespaceDict, safe_exec
 
 from synapse.mcp_tools import audit, connection, documents, serialise, settings
 from synapse.mcp_tools.guard import validate_read_only
+from synapse.sandbox_hints import sandbox_hint
 
 
 def parameters(value):
@@ -68,17 +69,6 @@ def _aggregate(doctype, metrics=None, group_by=None, period=None, filters=None, 
 		frappe.throw(str(error))
 
 
-def _sandbox_hint(error) -> str | None:
-	"""Plain words for the safe exec errors that trip up most scripts."""
-	text = str(error)
-	if "starts with _" in text:
-		return (
-			"Frappe's safe exec blocks names and dict keys that start with _, for example "
-			'row["_total"]. Rename them without the underscore, for example row["total_hidden"].'
-		)
-	return None
-
-
 def _script_line(error, name) -> str:
 	"""', line N' for the deepest frame inside the script, when there is one.
 
@@ -125,7 +115,7 @@ def execute_script(name, args=None):
 			script_filename=doc.name,
 		)
 	except SyntaxError as error:
-		hint = _sandbox_hint(error)
+		hint = sandbox_hint(error)
 		if not hint:
 			raise
 		frappe.throw(f"Synapse Script {doc.name}{_script_line(error, doc.name)}: {hint}")
