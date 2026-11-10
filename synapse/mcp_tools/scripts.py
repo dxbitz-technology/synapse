@@ -18,15 +18,22 @@ def execute_synapse_script(name: str, args: dict | None = None):
 	Pass args the way the page passes them. Synapse app dashboards send
 	{"filters": {...}} with the same keys repeated at the top level.
 
+	The reply has cost: data calls, rows read and seconds against the run's
+	limits, plus advice when the run used more than half of any limit. Fix the
+	script until advice is empty. A run over a limit is stopped with the reason.
+
 	Args:
 	        name: The saved Synapse Script name.
 	        args: Optional script parameters as an object.
 	"""
+	import frappe
+
 	from synapse.scripts import execute_script
 
 	check(settings.get_policy(), READ, "Synapse Script")
 	audit.current().target("Synapse Script", name)
-	return {"data": execute_script(name, args)}
+	data = execute_script(name, args)
+	return {"data": data, "cost": getattr(frappe.local, "synapse_last_cost", None)}
 
 
 @mcp.tool(

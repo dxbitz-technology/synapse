@@ -51,6 +51,26 @@ class TestBudget(unittest.TestCase):
 	def test_scripts_cannot_swallow_it_with_except_exception(self):
 		self.assertFalse(issubclass(BudgetExceeded, Exception))
 
+	def test_one_call_may_take_what_is_left(self):
+		budget = Budget(rows=100)
+		self.assertEqual(budget.rows_left(), 101)
+		budget.after_call([{}] * 60)
+		self.assertEqual(budget.rows_left(), 41)
+
+	def test_cost_and_advice_past_half_of_a_limit(self):
+		clock = Clock()
+		budget = Budget(queries=10, rows=100, seconds=10, clock=clock)
+		budget.before_call()
+		budget.after_call([{}] * 10)
+		self.assertEqual(budget.advice(), [])
+		for _ in range(5):
+			budget.before_call()
+		budget.after_call([{}] * 50)
+		clock.now = 6
+		self.assertEqual(len(budget.advice()), 3)
+		cost = budget.cost()
+		self.assertEqual((cost["data_calls"], cost["rows_read"], cost["seconds"]), (6, 60, 6))
+
 
 if __name__ == "__main__":
 	unittest.main()

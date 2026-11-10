@@ -9,7 +9,7 @@ from frappe.utils.safe_exec import NamespaceDict, safe_exec
 
 from synapse.mcp_tools import audit, connection, documents, serialise, settings
 from synapse.mcp_tools.guard import validate_read_only
-from synapse.run_budget import Budget, BudgetExceeded
+from synapse.run_budget import QUEUED_SECONDS, Budget, BudgetExceeded
 from synapse.sandbox_hints import sandbox_hint
 
 
@@ -44,13 +44,19 @@ def _charged(call):
 	return run
 
 
-def _new_budget():
+def new_budget(queued=False):
+	"""The limits for one run. A queued run gets more time, since it holds no web worker."""
 	conf = frappe.conf
-	return Budget(
+	seconds = conf.get("synapse_script_max_seconds")
+	if queued:
+		seconds = conf.get("synapse_script_queued_seconds") or QUEUED_SECONDS
+	budget = Budget(
 		queries=conf.get("synapse_script_max_queries"),
 		rows=conf.get("synapse_script_max_rows"),
-		seconds=conf.get("synapse_script_max_seconds"),
+		seconds=seconds,
 	)
+	budget.statement_seconds = 60 if queued else 15
+	return budget
 
 
 def query(sql, values=None):
@@ -59,13 +65,15 @@ def query(sql, values=None):
 	budget = _budget()
 	seconds = 15
 	if budget:
-		seconds = max(1, min(seconds, math.ceil(budget.before_call())))
+		seconds = max(1, min(budget.statement_seconds, math.ceil(budget.before_call())))
 	if not settings.sql_tool_enabled():
 		frappe.throw("Synapse SQL access is disabled for this user.", frappe.PermissionError)
 	sql = validate_read_only(sql, frappe.conf.get("mcp_sql_blocked_tables"))
 	if audit.current():
 		audit.current().sql(sql)
-	limit = settings.row_limit(None)
+	# Inside a script run the budget limits rows across the whole run, so one call may
+	# return what the script needs and no script has to page with OFFSET.
+	limit = budget.rows_left() if budget else settings.row_limit(None)
 	sql = f"SELECT * FROM ({sql}) AS synapse_script_result LIMIT {limit}"
 	if connection.is_configured():
 		with connection.read_only_cursor(seconds) as cursor:
@@ -140,7 +148,7 @@ def execute_script(name, args=None):
 	)
 	context = {"args": parameters(args)}
 	outer = _budget()
-	budget = frappe.local.synapse_budget = outer or _new_budget()
+	budget = frappe.local.synapse_budget = outer or new_budget()
 	try:
 		safe_exec(
 			doc.script,
@@ -165,6 +173,7 @@ def execute_script(name, args=None):
 		frappe.throw(f"Synapse Script {doc.name}{_script_line(error, doc.name)}: {hint}")
 	finally:
 		frappe.local.synapse_budget = outer
+		frappe.local.synapse_last_cost = {**budget.cost(), "advice": budget.advice()}
 	if budget.stopped:
 		# Checked after the run too, in case the script caught the stop with a bare except.
 		frappe.throw(f"Synapse Script {doc.name} was stopped to protect the server: {budget.stopped}")

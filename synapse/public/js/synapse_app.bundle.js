@@ -93,9 +93,108 @@
 		};
 	}
 
+	// ------------------------------------------------------------ queued script loads
+	// Script dashboards run in a background job. The server returns stored data at
+	// once when it is fresh; otherwise a ticket, and the page waits with a loader
+	// and checks back until the job is done. Older data stays on screen meanwhile.
+	const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+	const WAIT_LIMIT = 5 * 60 * 1000;
+
+	function loadNote(api) {
+		let el = api.el.querySelector(":scope > .sy-load");
+		if (!el) {
+			el = h("div", { class: "sy-load", role: "status" });
+			const head = api.el.firstElementChild;
+			head ? head.after(el) : api.el.prepend(el);
+		}
+		return el;
+	}
+
+	function showWaiting(api, stale) {
+		loadNote(api).replaceChildren(
+			h("span", { class: "sy-spin", "aria-hidden": "true" }),
+			h(
+				"span",
+				null,
+				stale
+					? "Showing earlier data while new figures are prepared."
+					: "Preparing this dashboard in the background. It appears here when ready, and you can open other pages meanwhile."
+			)
+		);
+	}
+
+	function showUpdated(api, r) {
+		const el = loadNote(api);
+		el.replaceChildren(r.updated_at ? h("span", { class: "bz-muted" }, "Data as of " + UI.fmt(r.updated_at, "datetime")) : "");
+	}
+
+	async function waitFor(cfg, ticket, isCurrent) {
+		const started = Date.now();
+		let gap = 1200;
+		while (Date.now() - started < WAIT_LIMIT) {
+			await sleep(gap);
+			if (!isCurrent()) throw new Error("Superseded by a newer load.");
+			const r = await call("dashboard_load_status", { name: cfg.id, ticket });
+			if (r.status === "ready") return r;
+			if (r.status === "failed") throw new Error(r.error || "The dashboard could not load.");
+			if (r.status === "lost") throw new Error("The background run was lost. Use Refresh data to try again.");
+			gap = Math.min(gap * 1.5, 4000);
+		}
+		throw new Error("Still waiting after five minutes. Background workers may be off on this site. Ask your admin to check them.");
+	}
+
+	function queuedFetch(cfg) {
+		let seq = 0;
+		const state = { refresh: false, api: null };
+		state.fetch = async (filters, api) => {
+			state.api = api;
+			const my = ++seq;
+			const isCurrent = () => my === seq;
+			const refresh = state.refresh;
+			state.refresh = false;
+			const r = await call("request_dashboard_data", { name: cfg.id, filters, refresh: refresh ? 1 : 0 });
+			if (r.status === "ready") {
+				showUpdated(api, r);
+				return r.data;
+			}
+			if (r.status === "failed") {
+				showUpdated(api, r);
+				throw new Error(r.error || "The dashboard could not load.");
+			}
+			showWaiting(api, r.data != null);
+			if (r.data != null) {
+				// Draw the older data now, then reload cleanly when the new run is stored.
+				waitFor(cfg, r.ticket, isCurrent)
+					.then(() => isCurrent() && api.refresh())
+					.catch((e) => isCurrent() && (showUpdated(api, r), notice(e.message, "error")));
+				return r.data;
+			}
+			try {
+				const done = await waitFor(cfg, r.ticket, isCurrent);
+				showUpdated(api, done);
+				return done.data;
+			} catch (e) {
+				if (isCurrent()) loadNote(api).replaceChildren();
+				throw e;
+			}
+		};
+		return state;
+	}
+
 	function buildConfig(cfg) {
 		const actions = [];
 		let current = null;
+		const queued = cfg.data_mode === "Script" ? queuedFetch(cfg) : null;
+		if (queued) {
+			actions.push({
+				label: "Refresh data",
+				onClick: () => {
+					if (!queued.api) return;
+					queued.refresh = true;
+					queued.api.refresh();
+				},
+			});
+		}
 		if ((cfg.filters || []).length && cfg.data_mode !== "Assistant") {
 			actions.push({
 				label: "Save filters",
@@ -130,7 +229,7 @@
 		const out = Object.assign({}, cfg, {
 			actions,
 			themeToggle: false,
-			fetch: (filters) => call("get_dashboard_data", { name: cfg.id, filters }),
+			fetch: queued ? queued.fetch : (filters) => call("get_dashboard_data", { name: cfg.id, filters }),
 			onChange: (filters) => (current = filters),
 		});
 

@@ -46,6 +46,7 @@ GUIDE = {
 		"4. save_dashboard once with the full layout. Read check in the reply. Every widget should have data.",
 		"5. Assistant only: before saving, ask how often to refresh and recommend one. After saving, publish_dashboard_snapshot with the data and 2 to 5 short notes, then offer a scheduled refresh.",
 		"6. Reply with the link and a one line description of each section.",
+		"Script pages: follow script.write_it_fast and script.test_and_fix before saving.",
 	],
 	"steps_study_my_data": [
 		"1. list_available_doctypes, then get_count on the main transaction DocTypes of the module (Sales: Sales Invoice, Sales Order, Quotation, Customer).",
@@ -86,7 +87,24 @@ GUIDE = {
 		"receives": "args['filters'] with resolved values (daterange is [from, to]).",
 		"returns": "result = {widget_key: value}. Same shapes as Query widgets get.",
 		"helpers": "frappe.aggregate(doctype, metrics=..., group_by=..., period=..., filters=...) returns rows. frappe.get_list and frappe.get_count. query(sql, values) only when SQL access is on.",
-		"limits": 'Frappe safe exec: no imports, no writes, no network, no other scripts. No names or dict keys that start with _ (row["_x"] fails), use plain names. get_list order_by takes one field. Each run may make 200 data calls, read 20,000 rows and run 30 seconds, or it is stopped. Never page through rows with LIMIT and OFFSET; group and sum in SQL instead. Test with execute_synapse_script before saving the page.',
+		"limits": 'Frappe safe exec: no imports, no writes, no network, no other scripts. No names or dict keys that start with _ (row["_x"] fails), use plain names. get_list order_by takes one field. One run may make 200 data calls, read 50,000 rows in total and run 30 seconds (120 when the app runs it in the background), or it is stopped. One query() may return all the rows the run has left, so never page with LIMIT and OFFSET.',
+		"how_it_runs": "The Synapse app runs Script pages in a background job and keeps each user's result for 5 minutes, so the page shows a loader on the first open and is instant after. A fast script still matters: every filter change is a new run.",
+		"write_it_fast": [
+			"Let the database do the work: SUM, COUNT and GROUP BY in SQL, so each query returns summary rows. Never read raw ledger rows (GL Entry, Stock Ledger Entry, Payment Ledger Entry) into Python to add them up.",
+			"One query per topic: group by month, company or party in a single query rather than one query per month or per company in a loop.",
+			"Never query inside a loop over rows. Collect the names, then one query with IN %(names)s.",
+			"Filter on indexed fields first: company, posting_date or transaction_date ranges, docstatus, is_cancelled. Keep functions off columns in WHERE (write posting_date between %(from)s and %(to)s, not year(posting_date) = 2026).",
+			"No ORDER BY unless the order is shown. No SELECT *; name the columns.",
+			"Stock ageing and similar FIFO work: bucket in SQL with datediff and SUM per item and age band, or give it its own page.",
+			"Only compute what the page shows. Split a large page into one page per topic (finance, sales, operations, stock), so each load runs only its own queries.",
+		],
+		"test_and_fix": [
+			'1. After writing or changing a Synapse Script, run execute_synapse_script with args shaped like the page sends: {"filters": {...}} plus the same keys at the top level. Try the default filters and the widest likely ones (all companies, a full year).',
+			"2. Read cost in the reply. If advice is not empty, or a run was stopped, change the script following write_it_fast and run it again. Repeat until it loads with empty advice.",
+			"3. If it fails, read the error and the line it names, fix the script, and run it again. Do not save the page until the script runs cleanly.",
+			"4. Then preview_dashboard_data on the page: every widget should be listed with data and widgets_without_data should be empty.",
+			"5. Tell the user how long the run took and anything you changed to make it faster.",
+		],
 	},
 	"example": {
 		"call": "save_dashboard",
@@ -402,8 +420,10 @@ def preview_dashboard_data(page: str, filters: dict | None = None):
 	layout = dash.layout_of(doc)
 	data = dash.data_for(doc, filters or {})
 	keys = dash.widget_keys(layout)
+	cost = frappe.local.synapse_last_cost if dash.is_script(doc) else None
 	return {
 		"filters_used": {} if dash.is_assistant(doc) else dash.clean_filters(layout, filters or {}),
+		"cost": cost,
 		"data": data,
 		"widgets_without_data": [k for k in keys if not (isinstance(data, dict) and k in data)]
 		if doc.view_type != "Report"

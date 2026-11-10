@@ -65,6 +65,26 @@ def get_dashboard_data(name: str, filters=None):
 	return dashboards.data_for(dashboards.readable_page(name), filters)
 
 
+@frappe.whitelist()
+def request_dashboard_data(name: str, filters=None, refresh=0) -> dict:
+	"""Script dashboards: stored data, or a queued run and a ticket to check with dashboard_load_status."""
+	_desk_user()
+	from synapse import queued_loads
+
+	doc = dashboards.readable_page(name)
+	if not dashboards.is_script(doc):
+		return {"status": "ready", "data": dashboards.data_for(doc, filters)}
+	return queued_loads.request(doc, filters, refresh=frappe.utils.cint(refresh))
+
+
+@frappe.whitelist()
+def dashboard_load_status(name: str, ticket: str) -> dict:
+	_desk_user()
+	from synapse import queued_loads
+
+	return queued_loads.status(dashboards.readable_page(name), ticket)
+
+
 @frappe.whitelist(methods=["POST"])
 def save_dashboard_filters(name: str, filters=None) -> dict:
 	_desk_user()

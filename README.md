@@ -116,13 +116,27 @@ assigns `result = {widget_key: value}`. Scripts can call
 on. Frappe's safe exec applies: no imports, writes or network, and no names or dict
 keys that start with `_`.
 
-Every script run has a budget: 200 data calls, 20,000 rows read and 30 seconds.
-A run that goes over is stopped with a plain message, and the same page with the
-same filters will not run again for five minutes, so reloading a broken page
-cannot overload the server. At most two Script dashboards load at once on a site.
-Group and sum in SQL rather than paging through raw rows. Change the limits in
-site config with `synapse_script_max_queries`, `synapse_script_max_rows`,
-`synapse_script_max_seconds` and `synapse_script_max_parallel`.
+In the Synapse app, Script dashboards load in a background job. The page shows a
+loader, then fills in when the job is done. Each user's result is kept for five
+minutes, so opening the page again is instant, and **Refresh data** runs it again.
+Older data stays on screen while a new run is in the queue. Sites need background
+workers running, which Frappe Cloud and `bench start` both provide.
+
+Every script run has a budget: 200 data calls, 50,000 rows read and 30 seconds,
+or 120 seconds in the background. One `query()` may return all the rows the run
+has left, so there is no need to page with LIMIT and OFFSET. A run that goes over
+is stopped with a plain message, and the same page with the same filters will not
+run again for five minutes. `execute_synapse_script` reports what each run cost
+and gives advice when a run uses more than half of a limit.
+
+Write scripts so the database does the work: SUM and GROUP BY in SQL, one query
+per topic rather than one per month or company, and filters on indexed fields
+such as company, posting_date and docstatus.
+
+Site config keys: `synapse_script_queue` (0 runs scripts in the request),
+`synapse_script_fresh_seconds`, `synapse_script_max_queries`,
+`synapse_script_max_rows`, `synapse_script_max_seconds`,
+`synapse_script_queued_seconds` and `synapse_script_max_parallel`.
 
 **Assistant** dashboards store the data dict on the page through
 `publish_dashboard_snapshot`. Fill in **Brief for the Assistant** and **Refresh

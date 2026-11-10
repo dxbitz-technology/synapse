@@ -553,7 +553,11 @@ def check_data(doc, data):
 		)
 
 
-def data_for(doc, filters=None) -> dict | list:
+def is_script(doc) -> bool:
+	return not is_assistant(doc) and not is_query(doc)
+
+
+def data_for(doc, filters=None, queued=False) -> dict | list:
 	if is_assistant(doc):
 		return sanitize(parse(doc.get("snapshot")) or {})
 	if is_query(doc):
@@ -563,12 +567,17 @@ def data_for(doc, filters=None) -> dict | list:
 	from synapse.scripts import run_script
 
 	values = clean_filters(layout_of(doc), filters)
-	with _script_guard(doc, values):
+	with _script_guard(doc, values, parallel=not queued):
 		data = run_script(doc.data_script, {"filters": values, **values})
 	if len(json.dumps(data, default=str)) > MAX_DATA:
 		frappe.throw(_("The Data Script returned too much data."))
 	check_data(doc, data)
 	return sanitize(data)
+
+
+def stopped_key(doc, values) -> str:
+	digest = hashlib.sha1(json.dumps(values, sort_keys=True, default=str).encode()).hexdigest()[:16]
+	return f"synapse:stopped:{doc.name}:{digest}"
 
 
 class _script_guard:
@@ -580,9 +589,10 @@ class _script_guard:
 	  with the same filters, so reloading a broken page cannot hammer the server.
 	"""
 
-	def __init__(self, doc, values):
-		digest = hashlib.sha1(json.dumps(values, sort_keys=True, default=str).encode()).hexdigest()[:16]
-		self.stopped_key = f"synapse:stopped:{doc.name}:{digest}"
+	def __init__(self, doc, values, parallel=True):
+		self.parallel = parallel
+		self.stopped_key = stopped_key(doc, values)
+		digest = self.stopped_key.rsplit(":", 1)[1]
 		self.running_key = f"synapse:running:{frappe.session.user}:{doc.name}:{digest}"
 		self.parallel_key = frappe.cache.make_key("synapse:running_scripts")
 		self.limit = cint(frappe.conf.get("synapse_script_max_parallel")) or 2
@@ -594,6 +604,9 @@ class _script_guard:
 		stopped = cache.get_value(self.stopped_key)
 		if stopped:
 			frappe.throw(_("{0} It will not run again for a few minutes.").format(stopped))
+		if not self.parallel:
+			# A queued run: the background workers already limit how many run at once.
+			return
 		if cache.get_value(self.running_key):
 			frappe.throw(_("This dashboard is still loading from your last request. Try again in a moment."))
 		# A sorted set of running loads by start time. Entries older than two minutes
