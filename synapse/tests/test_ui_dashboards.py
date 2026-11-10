@@ -271,3 +271,12 @@ class TestFilters(Base):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class TestSandboxHints(unittest.TestCase):
+	def test_underscore_keys_get_a_plain_fix(self):
+		from synapse import scripts
+
+		hint = scripts._sandbox_hint(SyntaxError("Key starts with _"))
+		self.assertIn("start with _", hint)
+		self.assertIsNone(scripts._sandbox_hint(SyntaxError("invalid syntax")))

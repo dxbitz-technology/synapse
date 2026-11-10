@@ -68,6 +68,32 @@ def _aggregate(doctype, metrics=None, group_by=None, period=None, filters=None, 
 		frappe.throw(str(error))
 
 
+def _sandbox_hint(error) -> str | None:
+	"""Plain words for the safe exec errors that trip up most scripts."""
+	text = str(error)
+	if "starts with _" in text:
+		return (
+			"Frappe's safe exec blocks names and dict keys that start with _, for example "
+			'row["_total"]. Rename them without the underscore, for example row["total_hidden"].'
+		)
+	return None
+
+
+def _script_line(error, name) -> str:
+	"""', line N' for the deepest frame inside the script, when there is one.
+
+	Frappe compiles scripts under a filename that ends with the scrubbed script name.
+	"""
+	marker = frappe.scrub(name)
+	line = None
+	tb = error.__traceback__
+	while tb is not None:
+		if tb.tb_frame.f_code.co_filename.endswith(marker):
+			line = tb.tb_lineno
+		tb = tb.tb_next
+	return f", line {line}" if line else ""
+
+
 def execute_script(name, args=None):
 	doc = frappe.get_doc("Synapse Script", name)
 	doc.check_permission("read")
@@ -83,20 +109,26 @@ def execute_script(name, args=None):
 		session=NamespaceDict(user=frappe.session.user),
 	)
 	context = {"args": parameters(args)}
-	safe_exec(
-		doc.script,
-		_globals={
-			"frappe": namespace,
-			"args": context["args"],
-			"query": query,
-			"run_script": None,
-			"FrappeClient": None,
-			"get_visible_columns": None,
-		},
-		_locals=context,
-		restrict_commit_rollback=True,
-		script_filename=doc.name,
-	)
+	try:
+		safe_exec(
+			doc.script,
+			_globals={
+				"frappe": namespace,
+				"args": context["args"],
+				"query": query,
+				"run_script": None,
+				"FrappeClient": None,
+				"get_visible_columns": None,
+			},
+			_locals=context,
+			restrict_commit_rollback=True,
+			script_filename=doc.name,
+		)
+	except SyntaxError as error:
+		hint = _sandbox_hint(error)
+		if not hint:
+			raise
+		frappe.throw(f"Synapse Script {doc.name}{_script_line(error, doc.name)}: {hint}")
 	result = serialise.to_client(context.get("result"))
 	if not isinstance(result, dict):
 		frappe.throw("Synapse Script must assign an object to result.")

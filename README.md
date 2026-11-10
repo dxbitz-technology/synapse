@@ -113,8 +113,8 @@ Sections can hold child `sections`, up to 4 levels. Tables and lists take
 assigns `result = {widget_key: value}`. Scripts can call
 `frappe.aggregate(doctype, metrics=..., group_by=..., period=..., filters=...)`,
 `frappe.get_list`, `frappe.get_count`, and `query(sql, values)` when SQL access is
-on. Frappe's safe exec applies: no imports, writes or network, and variables are
-not visible inside comprehensions, so use loops.
+on. Frappe's safe exec applies: no imports, writes or network, and no names or dict
+keys that start with `_`.
 
 **Assistant** dashboards store the data dict on the page through
 `publish_dashboard_snapshot`. Fill in **Brief for the Assistant** and **Refresh

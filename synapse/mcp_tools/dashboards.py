@@ -86,7 +86,7 @@ GUIDE = {
 		"receives": "args['filters'] with resolved values (daterange is [from, to]).",
 		"returns": "result = {widget_key: value}. Same shapes as Query widgets get.",
 		"helpers": "frappe.aggregate(doctype, metrics=..., group_by=..., period=..., filters=...) returns rows. frappe.get_list and frappe.get_count. query(sql, values) only when SQL access is on.",
-		"limits": "Frappe safe exec: no imports, no writes, no network, no other scripts. Variables are not visible inside list or dict comprehensions, use for loops. get_list order_by takes one field.",
+		"limits": 'Frappe safe exec: no imports, no writes, no network, no other scripts. No names or dict keys that start with _ (row["_x"] fails), use plain names. get_list order_by takes one field. Test with execute_synapse_script before saving the page.',
 	},
 	"example": {
 		"call": "save_dashboard",
