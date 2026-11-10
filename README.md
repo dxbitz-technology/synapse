@@ -116,6 +116,14 @@ assigns `result = {widget_key: value}`. Scripts can call
 on. Frappe's safe exec applies: no imports, writes or network, and no names or dict
 keys that start with `_`.
 
+Every script run has a budget: 200 data calls, 20,000 rows read and 30 seconds.
+A run that goes over is stopped with a plain message, and the same page with the
+same filters will not run again for five minutes, so reloading a broken page
+cannot overload the server. At most two Script dashboards load at once on a site.
+Group and sum in SQL rather than paging through raw rows. Change the limits in
+site config with `synapse_script_max_queries`, `synapse_script_max_rows`,
+`synapse_script_max_seconds` and `synapse_script_max_parallel`.
+
 **Assistant** dashboards store the data dict on the page through
 `publish_dashboard_snapshot`. Fill in **Brief for the Assistant** and **Refresh
 Every**. The assistant's notes show above the widgets.

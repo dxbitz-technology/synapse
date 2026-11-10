@@ -6,8 +6,10 @@ one dict keyed by widget key. Script dashboards build that dict with one Data
 Script per page. Assistant dashboards store it in Snapshot, written by the LLM.
 """
 
+import hashlib
 import json
 import re
+import time
 from datetime import date, timedelta
 
 import frappe
@@ -47,6 +49,9 @@ REPORT_KEYS = (
 KEY_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,59}")
 MAX_LAYOUT = 200_000
 MAX_DATA = 2_000_000
+# A script that was stopped for using too much is not run again for this long.
+STOPPED_COOLDOWN = 300
+STOPPED_MARK = "was stopped to protect the server"
 MAX_TEXT = 140
 MAX_DEPTH = 4
 
@@ -558,11 +563,60 @@ def data_for(doc, filters=None) -> dict | list:
 	from synapse.scripts import run_script
 
 	values = clean_filters(layout_of(doc), filters)
-	data = run_script(doc.data_script, {"filters": values, **values})
+	with _script_guard(doc, values):
+		data = run_script(doc.data_script, {"filters": values, **values})
 	if len(json.dumps(data, default=str)) > MAX_DATA:
 		frappe.throw(_("The Data Script returned too much data."))
 	check_data(doc, data)
 	return sanitize(data)
+
+
+class _script_guard:
+	"""Keeps one heavy dashboard from taking every web worker.
+
+	- the same user, page and filters load once at a time (double clicks, quick reloads);
+	- at most synapse_script_max_parallel scripts run at once on the site (default 2);
+	- a script stopped for using too much waits STOPPED_COOLDOWN before it runs again
+	  with the same filters, so reloading a broken page cannot hammer the server.
+	"""
+
+	def __init__(self, doc, values):
+		digest = hashlib.sha1(json.dumps(values, sort_keys=True, default=str).encode()).hexdigest()[:16]
+		self.stopped_key = f"synapse:stopped:{doc.name}:{digest}"
+		self.running_key = f"synapse:running:{frappe.session.user}:{doc.name}:{digest}"
+		self.parallel_key = frappe.cache.make_key("synapse:running_scripts")
+		self.limit = cint(frappe.conf.get("synapse_script_max_parallel")) or 2
+		self.counted = False
+		self.token = frappe.generate_hash(length=12)
+
+	def __enter__(self):
+		cache = frappe.cache
+		stopped = cache.get_value(self.stopped_key)
+		if stopped:
+			frappe.throw(_("{0} It will not run again for a few minutes.").format(stopped))
+		if cache.get_value(self.running_key):
+			frappe.throw(_("This dashboard is still loading from your last request. Try again in a moment."))
+		# A sorted set of running loads by start time. Entries older than two minutes
+		# are dropped, so a worker killed mid-run cannot hold a slot for ever.
+		now = time.time()
+		cache.zremrangebyscore(self.parallel_key, 0, now - 120)
+		cache.zadd(self.parallel_key, {self.token: now})
+		cache.expire(self.parallel_key, 300)
+		self.counted = True
+		if cache.zcard(self.parallel_key) > self.limit:
+			cache.zrem(self.parallel_key, self.token)
+			self.counted = False
+			frappe.throw(_("Other dashboards are loading right now. Try again in a moment."))
+		cache.set_value(self.running_key, 1, expires_in_sec=120)
+
+	def __exit__(self, kind, error, tb):
+		cache = frappe.cache
+		cache.delete_value(self.running_key)
+		if self.counted:
+			cache.zrem(self.parallel_key, self.token)
+		if error is not None and STOPPED_MARK in str(error):
+			cache.set_value(self.stopped_key, str(error), expires_in_sec=STOPPED_COOLDOWN)
+		return False
 
 
 def _check_queries(doc, layout):

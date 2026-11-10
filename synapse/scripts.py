@@ -2,12 +2,14 @@
 """Run saved dashboard functions without exposing write APIs to scripts."""
 
 import json
+import math
 
 import frappe
 from frappe.utils.safe_exec import NamespaceDict, safe_exec
 
 from synapse.mcp_tools import audit, connection, documents, serialise, settings
 from synapse.mcp_tools.guard import validate_read_only
+from synapse.run_budget import Budget, BudgetExceeded
 from synapse.sandbox_hints import sandbox_hint
 
 
@@ -23,9 +25,41 @@ def parameters(value):
 	return value
 
 
+def _budget():
+	return getattr(frappe.local, "synapse_budget", None)
+
+
+def _charged(call):
+	"""Wrap a script helper so every call counts against the run's budget."""
+
+	def run(*args, **kwargs):
+		budget = _budget()
+		if budget:
+			budget.before_call()
+		rows = call(*args, **kwargs)
+		if budget and isinstance(rows, list):
+			budget.after_call(rows)
+		return rows
+
+	return run
+
+
+def _new_budget():
+	conf = frappe.conf
+	return Budget(
+		queries=conf.get("synapse_script_max_queries"),
+		rows=conf.get("synapse_script_max_rows"),
+		seconds=conf.get("synapse_script_max_seconds"),
+	)
+
+
 def query(sql, values=None):
 	"""Bound, capped SELECT queries. SQL never promises row-level permissions."""
 	frappe.only_for("System Manager")
+	budget = _budget()
+	seconds = 15
+	if budget:
+		seconds = max(1, min(seconds, math.ceil(budget.before_call())))
 	if not settings.sql_tool_enabled():
 		frappe.throw("Synapse SQL access is disabled for this user.", frappe.PermissionError)
 	sql = validate_read_only(sql, frappe.conf.get("mcp_sql_blocked_tables"))
@@ -34,17 +68,19 @@ def query(sql, values=None):
 	limit = settings.row_limit(None)
 	sql = f"SELECT * FROM ({sql}) AS synapse_script_result LIMIT {limit}"
 	if connection.is_configured():
-		with connection.read_only_cursor(15) as cursor:
+		with connection.read_only_cursor(seconds) as cursor:
 			cursor.execute(sql, values)
 			rows = list(cursor.fetchmany(limit))
 	else:
 		# A statement-local timeout avoids changing the request's session or transaction.
-		statement = "SET STATEMENT max_statement_time=15 FOR " + sql
+		statement = f"SET STATEMENT max_statement_time={seconds} FOR " + sql
 		rows = (
 			frappe.db.sql(statement, as_dict=True)
 			if values is None
 			else frappe.db.sql(statement, values, as_dict=True)
 		)
+	if budget:
+		budget.after_call(rows)
 	return serialise.to_client(rows)
 
 
@@ -92,13 +128,19 @@ def execute_script(name, args=None):
 
 	# Document helpers retain Synapse grants, field checks and Frappe permissions.
 	namespace = NamespaceDict(
-		get_list=lambda doctype, **kw: documents.get_list.__wrapped__(doctype=doctype, **kw)["rows"],
-		get_count=lambda doctype, **kw: documents.get_count.__wrapped__(doctype=doctype, **kw)["count"],
-		aggregate=lambda doctype, **kw: _aggregate(doctype, **kw),
+		get_list=_charged(
+			lambda doctype, **kw: documents.get_list.__wrapped__(doctype=doctype, **kw)["rows"]
+		),
+		get_count=_charged(
+			lambda doctype, **kw: documents.get_count.__wrapped__(doctype=doctype, **kw)["count"]
+		),
+		aggregate=_charged(lambda doctype, **kw: _aggregate(doctype, **kw)),
 		db=NamespaceDict(sql=query),
 		session=NamespaceDict(user=frappe.session.user),
 	)
 	context = {"args": parameters(args)}
+	outer = _budget()
+	budget = frappe.local.synapse_budget = outer or _new_budget()
 	try:
 		safe_exec(
 			doc.script,
@@ -114,11 +156,18 @@ def execute_script(name, args=None):
 			restrict_commit_rollback=True,
 			script_filename=doc.name,
 		)
+	except BudgetExceeded:
+		pass
 	except SyntaxError as error:
 		hint = sandbox_hint(error)
 		if not hint:
 			raise
 		frappe.throw(f"Synapse Script {doc.name}{_script_line(error, doc.name)}: {hint}")
+	finally:
+		frappe.local.synapse_budget = outer
+	if budget.stopped:
+		# Checked after the run too, in case the script caught the stop with a bare except.
+		frappe.throw(f"Synapse Script {doc.name} was stopped to protect the server: {budget.stopped}")
 	result = serialise.to_client(context.get("result"))
 	if not isinstance(result, dict):
 		frappe.throw("Synapse Script must assign an object to result.")
