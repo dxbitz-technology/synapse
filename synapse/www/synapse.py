@@ -40,7 +40,7 @@ def _asset_version() -> int:
 def boot() -> dict:
 	from frappe.apps import get_apps
 
-	from synapse.api import ADMIN_ROLE, endpoint_url, user_is_covered
+	from synapse.api import ADMIN_ROLE, endpoint_url
 
 	user = frappe.get_cached_doc("User", frappe.session.user)
 	defaults = frappe.defaults.get_defaults()
@@ -51,8 +51,8 @@ def boot() -> dict:
 		"user_image": user.user_image,
 		"theme": user.desk_theme or "Light",
 		"is_admin": ADMIN_ROLE in frappe.get_roles(),
-		# The MCP link shows only to users an enabled Synapse Profile covers, like the user form shortcut.
-		"mcp_endpoint": endpoint_url() if user_is_covered() else None,
+		# Frappe's own MCP link, for any desk user. None when Frappe's MCP is switched off.
+		"mcp_endpoint": endpoint_url(),
 		"csrf_token": frappe.sessions.get_csrf_token(),
 		"site_name": frappe.local.site,
 		"apps": [{"title": "Desk", "route": "/app", "logo": None, "name": "desk"}, *apps],

@@ -1,14 +1,14 @@
 app_name = "synapse"
 app_title = "Synapse"
 app_publisher = "Dxbitz"
-app_description = "A permission-aware MCP server for Frappe and ERPNext"
+app_description = "Dashboards for Frappe and ERPNext, built through Frappe's MCP server"
 app_email = "info@dxbitz.com"
 app_license = "agpl-3.0"
 
 app_include_js = ["synapse.bundle.js"]
 app_include_css = ["/assets/synapse/css/synapse_library.css"]
 
-after_install = "synapse.components.catalog.seed"
+after_install = ["synapse.components.catalog.seed", "synapse.frappe_mcp.add_agent_note"]
 after_migrate = "synapse.components.catalog.seed"
 
 

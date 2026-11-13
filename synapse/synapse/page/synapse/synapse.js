@@ -58,7 +58,7 @@ class SynapseConsole {
 				["Pages", () => frappe.set_route("List", "Synapse Page")],
 				["Data Scripts", () => frappe.set_route("List", "Synapse Script")],
 				["Components", () => frappe.set_route("List", "Synapse Component")],
-				["Profiles", () => frappe.set_route("List", "Synapse Profile")],
+				["Profiles (deprecated)", () => frappe.set_route("List", "Synapse Profile")],
 				["Settings", () => frappe.set_route("Form", "Synapse Settings", "Synapse Settings")],
 				["Audit Log", () => frappe.set_route("List", "Synapse Log")],
 				["Health Check", () => this.health_check()],
@@ -115,8 +115,10 @@ class SynapseConsole {
 		search.oninput = show;
 		show();
 		if (context.is_admin || context.covered) {
-			const connection = $(`<div class="synapse-connect-card"><strong>${__("MCP Endpoint")}</strong>
-				<p class="text-muted">${__("Connect a compatible MCP client and sign in with your Frappe account.")}</p>
+			const connection = $(`<div class="synapse-connect-card"><strong>${__("MCP Link")}</strong>
+				<p class="text-muted">${__(
+					"This is the MCP server built into Frappe. Add it to your MCP client and sign in with your Frappe account. Synapse dashboards work through it."
+				)}</p>
 				<div class="synapse-toolbar"><input class="form-control" readonly aria-label="${__(
 					"MCP Endpoint"
 				)}" value="${escape(context.endpoint || "")}">
@@ -124,6 +126,17 @@ class SynapseConsole {
 			connection
 				.find("button")
 				.on("click", () => frappe.utils.copy_to_clipboard(context.endpoint || ""));
+			if (context.is_admin && !context.frappe_mcp) {
+				$(`<p class="text-muted small">${__(
+					"Frappe's MCP server is switched off. Turn on Enable MCP in System Settings."
+				)}</p>`).appendTo(connection);
+			}
+			if (context.is_admin && context.legacy_endpoint) {
+				$(`<p class="text-muted small">${__(
+					"The old Synapse MCP endpoint and Synapse Profiles are deprecated. Clients already connected to {0} keep working for now. Move them to the link above.",
+					[escape(context.legacy_endpoint)]
+				)}</p>`).appendTo(connection);
+			}
 		}
 	}
 
