@@ -12,19 +12,19 @@ frappe.ui.form.on("User", {
 				return;
 			}
 
-			frm.add_custom_button(__("Connect to Synapse"), () => show_synapse_connect(ctx.endpoint));
+			frm.add_custom_button(__("Connect an Assistant"), () => show_synapse_connect(ctx.endpoint));
 		});
 	},
 });
 
 function show_synapse_connect(endpoint) {
 	const url = endpoint || "";
-	const d = new frappe.ui.Dialog({ title: __("Connect to Synapse") });
+	const d = new frappe.ui.Dialog({ title: __("Connect an Assistant") });
 
 	$(`
 		<div style="font-size:13px;line-height:1.6;">
 			<p class="text-muted" style="margin-bottom:12px;">
-				${__("Connect a compatible MCP client using the link below, then sign in with your usual Frappe login. The same link and access settings apply whichever client or model you use.")}
+				${__("Add the link below to your MCP client as a remote server, then sign in with your usual login. This is the MCP server built into Frappe. Synapse dashboards work through it too.")}
 			</p>
 			<div style="font-weight:600;margin-bottom:6px;">${__("Your MCP link")}</div>
 			<div style="display:flex;gap:8px;align-items:center;">
@@ -32,7 +32,7 @@ function show_synapse_connect(endpoint) {
 				<button class="btn btn-primary btn-sm synapse-copy" style="white-space:nowrap;">${__("Copy")}</button>
 			</div>
 			<p class="text-muted" style="font-size:12px;margin-top:12px;">
-				${__("The assistant only ever sees what your roles allow. Every action it takes is logged.")}
+				${__("The assistant only ever sees and does what your roles allow.")}
 			</p>
 		</div>
 	`).appendTo(d.body);

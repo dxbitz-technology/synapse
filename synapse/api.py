@@ -3,14 +3,30 @@
 
 import frappe
 
+# The old Synapse MCP endpoint. Deprecated: it keeps working for clients already
+# connected to it, but new connections go to Frappe's own MCP server.
 ENDPOINT_PATH = "/api/method/synapse.mcp.handle_mcp"
 ADMIN_ROLE = "System Manager"
 
 
-def endpoint_url() -> str:
-	"""The absolute MCP endpoint URL for this site."""
+def legacy_endpoint_url() -> str:
+	"""The old Synapse MCP endpoint. Deprecated."""
 
 	return frappe.utils.get_url(ENDPOINT_PATH)
+
+
+def endpoint_url() -> str | None:
+	"""The MCP link to hand out: Frappe's own MCP server.
+
+	Falls back to the old Synapse endpoint only on a Frappe without the built-in
+	server, for profile-covered users, so an older bench keeps working.
+	"""
+
+	from synapse import frappe_mcp
+
+	if frappe_mcp.available():
+		return frappe_mcp.endpoint_url() if "Desk User" in frappe.get_roles() else None
+	return legacy_endpoint_url() if user_is_covered() else None
 
 
 def user_is_covered(user: str | None = None) -> bool:
@@ -51,10 +67,16 @@ def connect_context() -> dict:
 	shows at all; `is_admin` unlocks the console actions.
 	"""
 
+	from synapse import frappe_mcp
+
+	endpoint = endpoint_url()
+	is_admin = ADMIN_ROLE in frappe.get_roles()
 	return {
-		"endpoint": endpoint_url(),
-		"covered": user_is_covered(),
-		"is_admin": ADMIN_ROLE in frappe.get_roles(),
+		"endpoint": endpoint,
+		"covered": bool(endpoint),
+		"frappe_mcp": frappe_mcp.available(),
+		"legacy_endpoint": legacy_endpoint_url() if (is_admin or user_is_covered()) else None,
+		"is_admin": is_admin,
 	}
 
 

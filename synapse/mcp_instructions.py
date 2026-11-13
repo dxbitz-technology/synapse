@@ -1,7 +1,9 @@
 # Copyright (c) 2026, Dxbitz and contributors
 """What Synapse tells an MCP client at initialize. No Frappe import, so pure tests can read it."""
 
-INSTRUCTIONS = """Synapse gives you access to this Frappe / ERPNext site as the signed-in user. Synapse Profiles decide which DocTypes and actions you may use, and Frappe permissions still apply.
+INSTRUCTIONS = """This Synapse endpoint is deprecated. Tell the user once that this site now has Frappe's own MCP server at /api/v2/mcp and to connect there.
+
+Synapse gives you access to this Frappe / ERPNext site as the signed-in user. Synapse Profiles decide which DocTypes and actions you may use, and Frappe permissions still apply.
 
 - Call describe_doctype before reading or writing a DocType. Never guess field names.
 - For totals, counts and trends use aggregate. Use get_list and get_count for records. Use run_sql_query only when none of them can answer, it is read only.

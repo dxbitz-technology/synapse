@@ -8,3 +8,4 @@
 # app-owned and re-seeded idempotently from synapse/components/catalog.py.
 synapse.patches.seed_components
 synapse.patches.point_desktop_icon_to_app
+synapse.patches.add_frappe_mcp_agent_note

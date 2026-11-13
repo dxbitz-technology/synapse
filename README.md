@@ -1,7 +1,11 @@
 # Synapse
 
-An MCP server for Frappe 16 and ERPNext, with access profiles, an audit log and
-a dashboard app.
+A dashboard app for Frappe 16 and ERPNext that an assistant can build for you,
+through the MCP server built into Frappe.
+
+Needs Frappe 16.54 or later. Frappe ships its own MCP server from 16.53, and
+Synapse now uses it. The MCP server Synapse used to have, with its profiles, is
+deprecated. See [The old Synapse endpoint](#the-old-synapse-endpoint).
 
 - [Documentation](https://github.com/dxbitz-technology/synapse/wiki/Documentation)
 - [Endpoints](https://github.com/dxbitz-technology/synapse/wiki/Endpoints)
@@ -30,23 +34,21 @@ site of the bench. Turn it on only if you need Script dashboards:
 bench set-config -g server_script_enabled 1
 ```
 
-Then open **Synapse Settings** in Desk, enable the endpoint, and create a
-**Synapse Profile** for the roles that may connect. A user with no matching
-profile reaches nothing.
+Make sure **Enable MCP** is ticked in System Settings. It is on by default.
 
 ## Connect an MCP client
 
 Open the Synapse app and click **Copy MCP link** at the bottom of the sidebar.
-Add that link to your MCP client as a remote server. The client signs in with
-OAuth, so OAuth Settings must allow dynamic client registration.
+The link is Frappe's own MCP server, `https://your.site/api/v2/mcp`. Add it to
+your MCP client as a remote server. The client signs in with OAuth, so OAuth
+Settings must allow dynamic client registration.
 
-Every call runs as the signed-in user. Profiles decide which DocTypes and actions
-are reachable, and Frappe permissions still apply. Every call is written to the
-Synapse Log.
+Every call runs as the signed-in user, and plain Frappe permissions decide what
+it can reach. To build dashboards, a user needs write access to Synapse Page.
 
-When a client connects, Synapse sends a few lines of instructions: describe a
-DocType before using it, prefer filtered reads over SQL, confirm writes with the
-user, and read `get_dashboard_guide` before working on dashboards.
+At install, Synapse adds one line to **Agent Instructions** in System Settings,
+so a connected assistant knows to read the dashboard guide first. Edit or remove
+it as you like.
 
 ## The Synapse app
 
@@ -145,9 +147,13 @@ Every**. The assistant's notes show above the widgets.
 Data never changes how a widget draws itself. Template, style and script keys in
 data are removed, and links must be site paths or http(s).
 
-## MCP tools for dashboards
+## Dashboard methods
 
-| Tool | What it does |
+On Frappe's MCP server the assistant reaches these through `call_method`, as
+`synapse.frappe_mcp.<name>`. They are ordinary whitelisted methods and follow
+Frappe permissions. Calls are still written to the Synapse Log.
+
+| Method | What it does |
 |---|---|
 | `get_dashboard_guide` | Rules, which data source to pick, steps for "build" and "study my data", formats, an example, and what this user can do now |
 | `aggregate` | Count, sum, average, min or max over any DocType, grouped or by period. No SQL |
@@ -157,16 +163,25 @@ data are removed, and links must be site paths or http(s).
 | `save_dashboard` | Creates or changes a dashboard in one call. Loads the data first and refuses to save if a widget fails |
 | `publish_dashboard_snapshot` | Stores new data and notes on an Assistant dashboard |
 
-The two write tools need the **Dashboard tools** switch in Synapse Settings and a
-profile with write on Synapse Page. They write only Synapse Pages, so the general
-write tools can stay off. Query dashboards need nothing else. Data Scripts are
-still created by a System Manager.
+The two write methods need write access to Synapse Page. They write only Synapse
+Pages. Query dashboards need nothing else. Data Scripts are still created by a
+System Manager.
+
+## The old Synapse endpoint
+
+Synapse used to run its own MCP server at
+`/api/method/synapse.mcp.handle_mcp`, gated by **Synapse Profiles** and the
+switches in **Synapse Settings**. It is deprecated now that Frappe has its own.
+It keeps working for clients already connected to it, and the same dashboard
+tools are there under their short names. Move those clients to the Frappe link
+when you can. Profiles, the backstop and the Settings switches only apply to
+this old endpoint, and will be removed in a later version.
 
 ## Sharing
 
 Pages are private by default. Use **Share** on a Synapse Page to give a Desk user
-read access. For Script dashboards, also share the Synapse Script and grant the
-reader's profile reads on Synapse Script and the source DocTypes. Assistant
+read access. For Script dashboards, also share the Synapse Script and make sure
+the reader can read Synapse Script and the source DocTypes. Assistant
 snapshots are visible to anyone who can read the page, without rechecking the
 records they came from.
 

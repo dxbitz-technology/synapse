@@ -294,7 +294,7 @@
 			"div",
 			{ class: "sy-start" },
 			h("h2", null, "Connect an assistant to build your first dashboard"),
-			h("p", null, "Add Synapse to your MCP client as a remote server. Then ask it for the dashboard you need. It appears here as soon as it is saved."),
+			h("p", null, "Add this site's MCP link to your MCP client as a remote server. Then ask it for the dashboard you need. It appears here as soon as it is saved."),
 			h("ol", null,
 				h("li", null, "Copy the MCP link."),
 				h("li", null, "Add it to your MCP client and sign in when asked."),
