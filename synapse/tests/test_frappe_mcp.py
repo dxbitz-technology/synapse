@@ -51,7 +51,7 @@ class TestFrappeMcp(unittest.TestCase):
 
 	def test_save_needs_write_on_synapse_page(self):
 		frappe.set_user("Guest")
-		with patch.object(frappe, "only_for"):
+		with patch.object(frappe, "get_roles", return_value=["Desk User"]):
 			result = frappe_mcp.get_dashboard_guide()
 		self.assertFalse(result.get("your_access", {}).get("save_dashboards", False))
 

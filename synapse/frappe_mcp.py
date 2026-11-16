@@ -89,7 +89,9 @@ def _frappe_permissions():
 
 
 def _run(fn, **kwargs):
-	frappe.only_for("Desk User")
+	# Checked directly: on Frappe 15, only_for lets everyone through while tests run.
+	if "Desk User" not in frappe.get_roles():
+		raise frappe.PermissionError
 	with _frappe_permissions():
 		return fn(**kwargs)
 
