@@ -324,9 +324,11 @@ def run(spec, extra_filters=None, limit=None):
 	period_field = spec["_period_field"]
 	db_groups = list(group_fields) + ([period_field] if period_field else [])
 
-	select = [*db_groups, {"COUNT": "*", "as": "__n"}]
+	from synapse.compat import aggregate_field
+
+	select = [*db_groups, aggregate_field("COUNT", "*", "__n")]
 	for kind, field in _sources(spec["_metrics"]):
-		select.append({kind.upper(): field, "as": f"__{kind}_{field}"})
+		select.append(aggregate_field(kind, field, f"__{kind}_{field}", doctype))
 
 	filters = dict(spec.get("filters") or {})
 	for k, v in (extra_filters or {}).items():

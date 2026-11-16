@@ -271,12 +271,14 @@ def get_count(doctype: str, filters: dict | None = None):
 		filters: Field/value pairs, same form as get_list.
 	"""
 
+	from synapse.compat import aggregate_field
+
 	doctype = _gate(READ, doctype)
 
 	rows = frappe.get_list(
 		doctype,
 		filters=_validate_filters(filters),
-		fields=[{"COUNT": "name"}],
+		fields=[aggregate_field("COUNT", "name")],
 		limit_page_length=0,
 	)
 

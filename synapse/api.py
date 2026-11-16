@@ -67,7 +67,7 @@ def connect_context() -> dict:
 	shows at all; `is_admin` unlocks the console actions.
 	"""
 
-	from synapse import frappe_mcp
+	from synapse import compat, frappe_mcp
 
 	endpoint = endpoint_url()
 	is_admin = ADMIN_ROLE in frappe.get_roles()
@@ -75,6 +75,7 @@ def connect_context() -> dict:
 		"endpoint": endpoint,
 		"covered": bool(endpoint),
 		"frappe_mcp": frappe_mcp.available(),
+		"frappe_mcp_supported": compat.frappe_has_mcp(),
 		"legacy_endpoint": legacy_endpoint_url() if (is_admin or user_is_covered()) else None,
 		"is_admin": is_admin,
 	}

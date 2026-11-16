@@ -12,19 +12,19 @@ frappe.ui.form.on("User", {
 				return;
 			}
 
-			frm.add_custom_button(__("Connect an Assistant"), () => show_synapse_connect(ctx.endpoint));
+			frm.add_custom_button(__("Connect an Assistant"), () => show_synapse_connect(ctx.endpoint, ctx.frappe_mcp));
 		});
 	},
 });
 
-function show_synapse_connect(endpoint) {
+function show_synapse_connect(endpoint, builtIn) {
 	const url = endpoint || "";
 	const d = new frappe.ui.Dialog({ title: __("Connect an Assistant") });
 
 	$(`
 		<div style="font-size:13px;line-height:1.6;">
 			<p class="text-muted" style="margin-bottom:12px;">
-				${__("Add the link below to your MCP client as a remote server, then sign in with your usual login. This is the MCP server built into Frappe. Synapse dashboards work through it too.")}
+				${__("Add the link below to your MCP client as a remote server, then sign in with your usual login.")}${builtIn ? " " + __("This is the MCP server built into Frappe. Synapse dashboards work through it too.") : ""}
 			</p>
 			<div style="font-weight:600;margin-bottom:6px;">${__("Your MCP link")}</div>
 			<div style="display:flex;gap:8px;align-items:center;">

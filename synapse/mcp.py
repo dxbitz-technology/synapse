@@ -2,8 +2,9 @@
 """The Synapse MCP endpoint."""
 
 import synapse
+from synapse.compat import frappe_has_mcp
 from synapse.mcp_core import MCP
-from synapse.mcp_instructions import INSTRUCTIONS
+from synapse.mcp_instructions import DEPRECATION, INSTRUCTIONS
 
 
 def _record_refusal(tool_name, reason, tool):
@@ -27,7 +28,7 @@ mcp = MCP(
 	on_refusal=_record_refusal,
 	external_tools=_external_tools,
 	oauth_scopes=(),
-	instructions=INSTRUCTIONS,
+	instructions=(DEPRECATION + INSTRUCTIONS) if frappe_has_mcp() else INSTRUCTIONS,
 )
 
 
