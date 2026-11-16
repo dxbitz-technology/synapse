@@ -11,18 +11,31 @@ concurrency:
 
 jobs:
   site-less:
-    name: Pure tests (no bench)
+    name: Pure tests (no bench, Python ${{ matrix.python }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: ${{ matrix.python }}
       - run: python -m unittest discover -s synapse -p 'test_mcp_*.py' -t .
 
   tests:
-    name: Server tests on a Frappe 16 bench
+    name: Server tests on a Frappe ${{ matrix.frappe }} bench
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - frappe: 16
+            python: "3.14"
+            node: 24
+          - frappe: 15
+            python: "3.11"
+            node: 20
     services:
       redis-cache:
         image: redis:alpine
@@ -42,11 +55,11 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: ${{ matrix.python }}
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: ${{ matrix.node }}
           check-latest: true
 
       - name: Install MariaDB client
@@ -54,10 +67,10 @@ jobs:
           sudo apt-get install -y mariadb-client
           printf '[client]\nskip-ssl\n' > "$HOME/.my.cnf"
 
-      - name: Set up a Frappe 16 bench
+      - name: Set up a Frappe ${{ matrix.frappe }} bench
         run: |
           pip install frappe-bench
-          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" --frappe-branch version-16 ~/frappe-bench
+          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" --frappe-branch version-${{ matrix.frappe }} ~/frappe-bench
           mariadb --skip-ssl --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL character_set_server = 'utf8mb4'"
           mariadb --skip-ssl --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL collation_server = 'utf8mb4_unicode_ci'"
 
@@ -80,5 +93,6 @@ jobs:
           TYPE: server
 
       - name: Browser regressions
+        if: matrix.frappe == 16
         working-directory: /home/runner/frappe-bench
         run: python apps/synapse/scripts/test_browser.py

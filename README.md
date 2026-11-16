@@ -1,11 +1,12 @@
 # Synapse
 
-A dashboard app for Frappe 16 and ERPNext that an assistant can build for you,
-through the MCP server built into Frappe.
+A dashboard app for Frappe and ERPNext that an assistant can build for you,
+over MCP.
 
-Needs Frappe 16.54 or later. Frappe ships its own MCP server from 16.53, and
-Synapse now uses it. The MCP server Synapse used to have, with its profiles, is
-deprecated. See [The old Synapse endpoint](#the-old-synapse-endpoint).
+Works on Frappe 15 and 16. Frappe ships its own MCP server from 16.53, and on
+those sites Synapse uses it. The MCP server Synapse has always had, with its
+profiles, is deprecated there. On Frappe 15 and older 16 releases it is still
+the way in. See [Frappe versions](#frappe-versions).
 
 - [Documentation](https://github.com/dxbitz-technology/synapse/wiki/Documentation)
 - [Endpoints](https://github.com/dxbitz-technology/synapse/wiki/Endpoints)
@@ -34,7 +35,10 @@ site of the bench. Turn it on only if you need Script dashboards:
 bench set-config -g server_script_enabled 1
 ```
 
-Make sure **Enable MCP** is ticked in System Settings. It is on by default.
+On Frappe 16.53 and later, make sure **Enable MCP** is ticked in System
+Settings. It is on by default. On older Frappe, open **Synapse Settings**,
+enable the endpoint, and create a **Synapse Profile** for the roles that may
+connect.
 
 ## Connect an MCP client
 
@@ -167,15 +171,30 @@ The two write methods need write access to Synapse Page. They write only Synapse
 Pages. Query dashboards need nothing else. Data Scripts are still created by a
 System Manager.
 
+## Frappe versions
+
+| Frappe | MCP link | Who decides access |
+|---|---|---|
+| 16.53 and later | Frappe's own, `/api/v2/mcp` | Frappe permissions |
+| 16 before 16.53 | Synapse's own endpoint | Synapse Profiles, then Frappe permissions |
+| 15 | Synapse's own endpoint | Synapse Profiles, then Frappe permissions |
+
+Frappe 16 serves the OAuth sign-in discovery itself, switched on in OAuth
+Settings. Frappe 15 has no OAuth Settings, so Synapse serves
+`/.well-known/oauth-authorization-server` and
+`/.well-known/oauth-protected-resource` there, pointing at Frappe's own OAuth
+endpoints. To let MCP clients register themselves, tick **Allow Dynamic Client
+Registration** in Synapse Settings. Otherwise make an OAuth Client by hand.
+
 ## The old Synapse endpoint
 
-Synapse used to run its own MCP server at
+Synapse has its own MCP server at
 `/api/method/synapse.mcp.handle_mcp`, gated by **Synapse Profiles** and the
-switches in **Synapse Settings**. It is deprecated now that Frappe has its own.
-It keeps working for clients already connected to it, and the same dashboard
-tools are there under their short names. Move those clients to the Frappe link
-when you can. Profiles, the backstop and the Settings switches only apply to
-this old endpoint, and will be removed in a later version.
+switches in **Synapse Settings**. On Frappe 16.53 and later it is deprecated,
+since Frappe has its own. It keeps working for clients already connected to it,
+and the same dashboard tools are there under their short names. Move those
+clients to the Frappe link when you can. Profiles, the backstop and the Settings
+switches only apply to this endpoint. On Frappe 15 it stays fully supported.
 
 ## Sharing
 
